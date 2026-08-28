@@ -1,0 +1,21 @@
+# Local privacy gate config (copy from .identity.example)
+.identity
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Build / env
+.env
+.env.*
+!.env.example
+dist/
+build/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/

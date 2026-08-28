@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Block commits that would use a non-anon identity when .identity is present.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+exec "${REPO_ROOT}/identity/check.sh"

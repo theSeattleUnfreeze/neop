@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Scan commit message for forbidden personal identifiers when .identity is present.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+MSG_FILE="${1:-}"
+[[ -n "$MSG_FILE" ]] || exit 0
+exec "${REPO_ROOT}/identity/check.sh" --msg "$MSG_FILE"

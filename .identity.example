@@ -1,0 +1,18 @@
+# Copy to .identity (gitignored). Presence enables hard privacy gates.
+#   cp .identity.example .identity
+#
+# Maintainer / agent work on theSeattleUnfreeze MUST keep this file present.
+# Public contributors who do not need anonymity may omit .identity (gates stay off).
+
+required_profile=anon
+required_git_name=theSeattleUnfreeze
+required_git_email=314436853+theSeattleUnfreeze@users.noreply.github.com
+required_gh_user=theSeattleUnfreeze
+required_ssh_host=github.com-anon
+required_remote_org=theSeattleUnfreeze
+
+# Comma-separated; matched case-insensitively against git identity and commit messages.
+forbidden_substrings=amcmillion
+
+# When commit.gpgsign or gpg.format=ssh is enabled, signing must match anon.
+require_signing_matches_anon=1
