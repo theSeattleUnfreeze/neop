@@ -73,6 +73,16 @@ Never auto-broadcast the same raw tx to both flavors.
 | `15001` | Legacy: classic 80-byte SHA256d (Fulcrum/electrs) |
 | `15011` | Blake2b: [Shulcrum](https://github.com/Kilombino/Shulcrum) — variable headers, protocol ≥1.6 headers-as-list, `blockchain.pow_algorithms` / 1.7 |
 
+## Implemented (shared-store slice)
+
+| Method | Status |
+|--------|--------|
+| `getnetwork` | Returns `{network}` |
+| `getstoreinfo` | Datadir paths + indexed block count |
+| `help` | Method list |
+
+`getflavors`, flavor-scoped `getblockchaininfo`, `listcoins`, and `sendrawtransaction` land in follow-up PRs.
+
 ## Status
 
-Stub: methods and error codes will gain concrete JSON schemas as `neopd` lands. Until then, treat this document as the normative intent for Phase A.
+Normative intent for Phase A+; live methods grow with `neopd` slices.
