@@ -1,10 +1,20 @@
 # Neapolitan (`neop`)
 
-Dual-flavor Bitcoin node and coin-control wallet: **legacy** (SHA-256 / Core) and **blake2b** (BIP-110 lineage), with replay-safe spends so only the flavor you select is affected.
+Dual-flavor Bitcoin node and coin-control wallet: **legacy** (SHA-256 / Core) and **blake2b** (Knots Blake2b / BIP-110 lineage), with replay-safe spends so only the flavor you select is affected.
 
 Published under [theSeattleUnfreeze](https://github.com/theSeattleUnfreeze). Daemon name: **`neopd`**.
 
-> Status: repository bootstrap. Identity / privacy gates land first; node and wallet features follow.
+> Status: identity gates shipped; Phase A docs + testnet4 compose stub. Engines stay pinned upstream — neop does not reimplement Blake2b PoW.
+
+## Wrapper-first
+
+| Piece | Role |
+|-------|------|
+| Bitcoin Core / Knots Blake2b | Pinned **validation engines** |
+| `neopd` | Shared archive mux, dual chainstates, flavor RPC, replay-safe send |
+| [Shulcrum](https://github.com/Kilombino/Shulcrum) | Vendored Electrum for variable Blake2b headers |
+
+Details: [docs/architecture.md](docs/architecture.md) · [docs/rpc.md](docs/rpc.md) · [docs/testnet4.md](docs/testnet4.md) · [docs/hosting.md](docs/hosting.md)
 
 ## Privacy gates (maintainers)
 
@@ -28,6 +38,16 @@ Public contributors who do not need anonymity may omit `.identity` (gates stay o
 git clone git@github.com-anon:theSeattleUnfreeze/neop.git
 cd neop
 ```
+
+## Testnet4 (development default)
+
+```bash
+cp .env.example .env   # set RPC passwords locally
+# Engine / neopd images are placeholders until Phase B — see docs/testnet4.md
+docker compose -f docker-compose.testnet4.yml config
+```
+
+Explorer: [mempool.guide/testnet4](https://mempool.guide/testnet4).
 
 ## License
 

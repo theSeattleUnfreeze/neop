@@ -1,0 +1,71 @@
+# Testnet4 compose skeleton for Neapolitan (neop).
+# Engines are pinned validation binaries — do not reimplement PoW here.
+# Copy .env.example → .env before up. Datadir: ./data/testnet4 (never mainnet volumes).
+#
+# Status: stub. Image tags / neopd service land when blake2b-engine + shared-store slices ship.
+# Explorer: https://mempool.guide/testnet4
+
+services:
+  bitcoind-legacy:
+    # Pin a release tag when wiring Phase B (Bitcoin Core, -testnet4).
+    image: bitcoin/bitcoin:placeholder
+    profiles: ["engines"]
+    restart: unless-stopped
+    command:
+      - -testnet4
+      - -server=1
+      - -rpcallowip=0.0.0.0/0
+      - -rpcbind=0.0.0.0
+      - -rpcuser=${LEGACY_RPC_USER}
+      - -rpcpassword=${LEGACY_RPC_PASSWORD}
+    volumes:
+      - ./data/testnet4/legacy:/data
+    ports:
+      - "18332:18332" # adjust when Core testnet4 RPC port is confirmed for the pinned image
+    networks:
+      - neop-testnet4
+
+  bitcoind-blake2b:
+    # Pin Knots Blake2b (#359 lineage) when blake2b-engine lands — not stock Knots.
+    image: neop/knots-blake2b:placeholder
+    profiles: ["engines"]
+    restart: unless-stopped
+    command:
+      - -testnet4
+      - -server=1
+      - -rpcallowip=0.0.0.0/0
+      - -rpcbind=0.0.0.0
+      - -rpcuser=${BLAKE2B_RPC_USER}
+      - -rpcpassword=${BLAKE2B_RPC_PASSWORD}
+    volumes:
+      - ./data/testnet4/blake2b:/data
+    ports:
+      - "18333:18332"
+    networks:
+      - neop-testnet4
+
+  neopd:
+    # Mux + replay-safe RPC. Image/build context TBD when neopd exists.
+    image: neop/neopd:placeholder
+    profiles: ["neopd"]
+    restart: unless-stopped
+    depends_on: []
+    environment:
+      NEOP_NETWORK: testnet4
+      LEGACY_RPC_URL: http://bitcoind-legacy:18332
+      BLAKE2B_RPC_URL: http://bitcoind-blake2b:18332
+      LEGACY_RPC_USER: ${LEGACY_RPC_USER}
+      LEGACY_RPC_PASSWORD: ${LEGACY_RPC_PASSWORD}
+      BLAKE2B_RPC_USER: ${BLAKE2B_RPC_USER}
+      BLAKE2B_RPC_PASSWORD: ${BLAKE2B_RPC_PASSWORD}
+    volumes:
+      - ./data/testnet4:/data
+    ports:
+      - "18334:18334" # neopd wallet/mux RPC (placeholder)
+      # Electrum (later): 15001 legacy, 15011 blake2b/Shulcrum
+    networks:
+      - neop-testnet4
+
+networks:
+  neop-testnet4:
+    name: neop-testnet4

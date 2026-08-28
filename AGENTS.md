@@ -64,13 +64,31 @@ Stop. Run `github-identity check` and `./identity/check.sh --push`. Do not push 
 
 - Shared pre-split SHA-256 block / Electrum archive
 - Live tips: **legacy** (Core) and **blake2b** (Knots Blake2b / BIP-110 lineage)
+- Optional dead tip: `rdts_sha256` (archive only)
 - Replay-safe spends: only the selected flavor is affected
 - Daemon name: **`neopd`**
 
-Upstream engines are pinned (not forked as full archives). Validate on **Bitcoin Testnet4** before mainnet.
+Validate on **Bitcoin Testnet4** before mainnet ([mempool.guide/testnet4](https://mempool.guide/testnet4)).
+
+### Wrapper-first architecture (do not rebuild the wheel)
+
+Core and Knots are **validation engines**. Pin versions; **do not reimplement** Blake2b PoW, v2 header crypto, consensus policy, or GBT/Stratum in this repo.
+
+| Layer | Owns | Does **not** own |
+|-------|------|------------------|
+| Bitcoin Core (pinned) | Legacy SHA-256 validation / tip | Wallet UX, dual-flavor mux |
+| Bitcoin Knots Blake2b (pinned; [#359](https://github.com/bitcoinknots/bitcoin/pull/359) lineage, plus #358 / #363 / #357 when ready) | Blake2b PoW, v2 headers, tip policy | Shared archive layout, replay UX |
+| **`neopd`** | Shared pre-split SHA-256 archive mux, dual chainstates, flavor-scoped RPC, replay-safe catalog/send, wallet UX glue | Consensus crypto, mining/DATUM |
+| Electrum | Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) (variable headers + `blockchain.pow_algorithms` / protocol 1.7) | Forking Blake2b hashing into neop |
+
+**Ethos:** the user picks a flavor; **only that chain is affected** by a spend. Default-deny replay-exposed (`both`) UTXOs; ceremony / unique inputs; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
+
+See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/testnet4.md](docs/testnet4.md), [docs/hosting.md](docs/hosting.md).
 
 ### Conventions
 
 - Prefer placeholders in examples: `STARTOS_HOST`, `VPS_PUBLIC_IP`, not real infrastructure names.
 - Never commit `.env`, RPC passwords, or node credentials.
 - Minimize scope per PR; do not mix anonymity tooling changes with feature work unless necessary.
+- Mining/DATUM = community test stack (paulscode et al.), not neop scope.
+- Related but separate: `bip110-dashboard` monitoring UI — do not mix feature work unless asked.
