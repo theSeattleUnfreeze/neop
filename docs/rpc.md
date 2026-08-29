@@ -73,15 +73,17 @@ Never auto-broadcast the same raw tx to both flavors.
 | `15001` | Legacy: classic 80-byte SHA256d (Fulcrum/electrs) |
 | `15011` | Blake2b: [Shulcrum](https://github.com/Kilombino/Shulcrum) — variable headers, protocol ≥1.6 headers-as-list, `blockchain.pow_algorithms` / 1.7 |
 
-## Implemented (shared-store slice)
+## Implemented
 
 | Method | Status |
 |--------|--------|
 | `getnetwork` | Returns `{network}` |
 | `getstoreinfo` | Datadir paths + indexed block count |
+| `getflavors` | Dual engine health |
+| `getblockchaininfo` | Requires `flavor`; proxies pinned engine |
 | `help` | Method list |
 
-`getflavors`, flavor-scoped `getblockchaininfo`, `listcoins`, and `sendrawtransaction` land in follow-up PRs.
+`listcoins` and `sendrawtransaction` land in the catalog-replay PR.
 
 ## Status
 
