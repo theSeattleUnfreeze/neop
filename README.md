@@ -18,9 +18,13 @@ Details: [docs/architecture.md](docs/architecture.md) · [docs/rpc.md](docs/rpc.
 
 ## Privacy gates (maintainers)
 
-This org must not leak a personal GitHub account. After clone:
+This org must not leak a personal GitHub account. Install the identity CLI from [theSeattleUnfreeze/github-identity](https://github.com/theSeattleUnfreeze/github-identity), then after cloning neop:
 
 ```bash
+# once per machine (if github-identity is not on PATH):
+#   git clone git@github.com-anon:theSeattleUnfreeze/github-identity.git
+#   cd github-identity && ./install.sh
+
 cp .identity.example .identity
 ./identity/install-hooks.sh
 github-identity anon

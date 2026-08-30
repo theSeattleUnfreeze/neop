@@ -15,6 +15,15 @@ This project is published under the **theSeattleUnfreeze** GitHub account only.
 
 ### Required workflow (before any git / gh write)
 
+0. Install the identity CLI if missing ([theSeattleUnfreeze/github-identity](https://github.com/theSeattleUnfreeze/github-identity)):
+
+```bash
+git clone git@github.com-anon:theSeattleUnfreeze/github-identity.git
+cd github-identity && ./install.sh
+# edit ~/.github-profiles/anon.env if prompted, then:
+github-identity anon && github-identity check
+```
+
 1. Switch and verify the anon profile:
 
 ```bash
