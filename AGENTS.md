@@ -72,41 +72,45 @@ Stop. Run `github-identity check` and `./identity/check.sh --push`. Do not push 
 **Neapolitan (`neop`)** is a dual-flavor Bitcoin node and coin-control wallet:
 
 - Shared pre-split SHA-256 block / Electrum archive
-- Live tips: **Bitcoin** (Blake2b-sia / Knots) and **Corecoin** (SHA-256d / pre-RDTS Knots)
+- Live tips: **Core** chain (SHA-256d) and **Knots** chain (Blake2b-sia)
 - Optional dead tip: `rdts_sha256` (archive only)
-- Replay-safe spends: only the selected flavor is affected
+- Replay-safe spends: only the selected chain is affected
 - Daemon name: **`neopd`**
 
 Validate on **Bitcoin Testnet4** before mainnet ([mempool.guide/testnet4](https://mempool.guide/testnet4)).
 
 ### Naming (agents: use consistently)
 
-| Product name | PoW | Preferred engine | RPC alias (today) |
-|--------------|-----|------------------|-------------------|
-| **Bitcoin** | Blake2b-sia | Knots (Blake2b [#359](https://github.com/bitcoinknots/bitcoin/pull/359)) | `blake2b` |
-| **Corecoin** | SHA-256d | Pre-RDTS Knots | `legacy` |
+**Chains:** **Core** and **Knots** only. Do not use separate coin names (no “Corecoin”, no chain-specific “Bitcoin” token labels).
 
-Do not call Corecoin “legacy Core” in user-facing copy — **Corecoin** is SHA-256d Bitcoin on the Core-side tip; the engine is **pre-RDTS Knots**, not stock Core, unless Knots is unavailable.
+**UTXOs:** say **UTXOs on the Core chain** or **UTXOs on the Knots chain** (catalog: `core_only` / `knots_only` / `both` when wired — today’s RPC may still say `legacy_only` / `blake2b_only`).
+
+| Chain | PoW | Preferred node | RPC alias (today) |
+|-------|-----|----------------|-------------------|
+| **Knots** | Blake2b-sia | Knots (Blake2b [#359](https://github.com/bitcoinknots/bitcoin/pull/359)) | `blake2b` |
+| **Core** | SHA-256d | Pre-RDTS Knots | `legacy` |
+
+Distinguish **Core chain** (the SHA-256d tip) from the **Bitcoin Core node** (fallback validation software for the Core chain). Preferred engine for the Core chain is **pre-RDTS Knots**, not the Bitcoin Core node, unless Knots is unavailable.
 
 ### Validation engines (wrapper-first — do not rebuild the wheel)
 
 Pin engine versions; **do not reimplement** Blake2b PoW, v2 header crypto, consensus policy, or GBT/Stratum in this repo.
 
-| Engine | Chain | Policy |
-|--------|-------|--------|
-| **Knots** (Blake2b hardfork) | **Bitcoin** | Required. Knots upstream focus moves here. |
-| **Pre-RDTS Knots** | **Corecoin** | **Preferred** for SHA-256d validation. |
-| **Bitcoin Core** | **Corecoin** | Fallback only — works in a pinch, not recommended for new deployments. |
-| **Bitcoin Core v29** | **Corecoin** | Recommended if Knots drops SHA-256d support. |
-| **Bitcoin Core v30** | **Corecoin** | Not recommended with default settings; acceptable only with documented config changes (pin + document in compose when wired). |
+| Node software | Chain | Policy |
+|---------------|-------|--------|
+| **Knots** (Blake2b hardfork) | **Knots** | Required. Knots upstream focus moves here. |
+| **Pre-RDTS Knots** | **Core** | **Preferred** for SHA-256d validation. |
+| **Bitcoin Core** | **Core** | Fallback only — works in a pinch, not recommended for new deployments. |
+| **Bitcoin Core v29** | **Core** | Recommended if Knots drops SHA-256d support. |
+| **Bitcoin Core v30** | **Core** | Not recommended with default settings; acceptable only with documented config changes (pin + document in compose when wired). |
 
 | Layer | Owns | Does **not** own |
 |-------|------|------------------|
-| Knots (Bitcoin) / pre-RDTS Knots or Core (Corecoin) | Tip validation for the selected flavor | Wallet UX, dual-flavor mux |
+| Knots node (Knots chain) / pre-RDTS Knots or Bitcoin Core node (Core chain) | Tip validation for the selected chain | Wallet UX, dual-flavor mux |
 | **`neopd`** | Shared pre-split SHA-256 archive mux, dual chainstates, flavor-scoped RPC, replay-safe catalog/send, wallet UX glue | Consensus crypto, mining/DATUM |
-| Electrum | Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) for **Bitcoin**; classic Fulcrum/electrs for **Corecoin** | Forking Blake2b hashing into neop |
+| Electrum | Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) for **Knots chain**; classic Fulcrum/electrs for **Core chain** | Forking Blake2b hashing into neop |
 
-**Ethos:** the user picks a flavor; **only that chain is affected** by a spend. Default-deny replay-exposed (`both`) UTXOs; ceremony / unique inputs; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
+**Ethos:** the user picks a chain; **only that chain is affected** by a spend. Default-deny replay-exposed UTXOs present on **both** chains; ceremony / unique inputs; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
 
 See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/testnet4.md](docs/testnet4.md), [docs/hosting.md](docs/hosting.md).
 
