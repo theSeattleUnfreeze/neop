@@ -15,6 +15,15 @@ This project is published under the **theSeattleUnfreeze** GitHub account only.
 
 ### Required workflow (before any git / gh write)
 
+0. Install the identity CLI if missing ([theSeattleUnfreeze/github-identity](https://github.com/theSeattleUnfreeze/github-identity)):
+
+```bash
+git clone git@github.com-anon:theSeattleUnfreeze/github-identity.git
+cd github-identity && ./install.sh
+# edit ~/.github-profiles/anon.env if prompted, then:
+github-identity anon && github-identity check
+```
+
 1. Switch and verify the anon profile:
 
 ```bash
@@ -63,23 +72,39 @@ Stop. Run `github-identity check` and `./identity/check.sh --push`. Do not push 
 **Neapolitan (`neop`)** is a dual-flavor Bitcoin node and coin-control wallet:
 
 - Shared pre-split SHA-256 block / Electrum archive
-- Live tips: **legacy** (Core) and **blake2b** (Knots Blake2b / BIP-110 lineage)
+- Live tips: **Bitcoin** (Blake2b-sia / Knots) and **Corecoin** (SHA-256d / pre-RDTS Knots)
 - Optional dead tip: `rdts_sha256` (archive only)
 - Replay-safe spends: only the selected flavor is affected
 - Daemon name: **`neopd`**
 
 Validate on **Bitcoin Testnet4** before mainnet ([mempool.guide/testnet4](https://mempool.guide/testnet4)).
 
-### Wrapper-first architecture (do not rebuild the wheel)
+### Naming (agents: use consistently)
 
-Core and Knots are **validation engines**. Pin versions; **do not reimplement** Blake2b PoW, v2 header crypto, consensus policy, or GBT/Stratum in this repo.
+| Product name | PoW | Preferred engine | RPC alias (today) |
+|--------------|-----|------------------|-------------------|
+| **Bitcoin** | Blake2b-sia | Knots (Blake2b [#359](https://github.com/bitcoinknots/bitcoin/pull/359)) | `blake2b` |
+| **Corecoin** | SHA-256d | Pre-RDTS Knots | `legacy` |
+
+Do not call Corecoin “legacy Core” in user-facing copy — **Corecoin** is SHA-256d Bitcoin on the Core-side tip; the engine is **pre-RDTS Knots**, not stock Core, unless Knots is unavailable.
+
+### Validation engines (wrapper-first — do not rebuild the wheel)
+
+Pin engine versions; **do not reimplement** Blake2b PoW, v2 header crypto, consensus policy, or GBT/Stratum in this repo.
+
+| Engine | Chain | Policy |
+|--------|-------|--------|
+| **Knots** (Blake2b hardfork) | **Bitcoin** | Required. Knots upstream focus moves here. |
+| **Pre-RDTS Knots** | **Corecoin** | **Preferred** for SHA-256d validation. |
+| **Bitcoin Core** | **Corecoin** | Fallback only — works in a pinch, not recommended for new deployments. |
+| **Bitcoin Core v29** | **Corecoin** | Recommended if Knots drops SHA-256d support. |
+| **Bitcoin Core v30** | **Corecoin** | Not recommended with default settings; acceptable only with documented config changes (pin + document in compose when wired). |
 
 | Layer | Owns | Does **not** own |
 |-------|------|------------------|
-| Bitcoin Core (pinned) | Legacy SHA-256 validation / tip | Wallet UX, dual-flavor mux |
-| Bitcoin Knots Blake2b (pinned; [#359](https://github.com/bitcoinknots/bitcoin/pull/359) lineage, plus #358 / #363 / #357 when ready) | Blake2b PoW, v2 headers, tip policy | Shared archive layout, replay UX |
+| Knots (Bitcoin) / pre-RDTS Knots or Core (Corecoin) | Tip validation for the selected flavor | Wallet UX, dual-flavor mux |
 | **`neopd`** | Shared pre-split SHA-256 archive mux, dual chainstates, flavor-scoped RPC, replay-safe catalog/send, wallet UX glue | Consensus crypto, mining/DATUM |
-| Electrum | Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) (variable headers + `blockchain.pow_algorithms` / protocol 1.7) | Forking Blake2b hashing into neop |
+| Electrum | Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) for **Bitcoin**; classic Fulcrum/electrs for **Corecoin** | Forking Blake2b hashing into neop |
 
 **Ethos:** the user picks a flavor; **only that chain is affected** by a spend. Default-deny replay-exposed (`both`) UTXOs; ceremony / unique inputs; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
 
