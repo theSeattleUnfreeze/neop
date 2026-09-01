@@ -36,7 +36,18 @@ RPC and config may still use `flavor=blake2b` / `flavor=legacy` as aliases for t
 | `neopd` | Shared archive mux, dual chainstates, flavor RPC, replay-safe send |
 | [Shulcrum](https://github.com/Kilombino/Shulcrum) | Vendored Electrum server for variable Blake2b headers |
 
-Details: [docs/architecture.md](docs/architecture.md) · [docs/rpc.md](docs/rpc.md) · [docs/testnet4.md](docs/testnet4.md) · [docs/hosting.md](docs/hosting.md)
+Details: [docs/architecture.md](docs/architecture.md) · [docs/rpc.md](docs/rpc.md) · [docs/testnet4.md](docs/testnet4.md) · [docs/hosting.md](docs/hosting.md) · [docs/scoop.md](docs/scoop.md)
+
+## Scoop (optional read-only UI)
+
+**Scoop** catalogs Core / Knots / both presence, per-tip movement, and likely **Spills** (dual-tip spends). Next.js + Postgres; talks to Fulcrum and Shulcrum; does not sign.
+
+```bash
+docker compose -f docker-compose.scoop.yml --profile scoop up --build
+# or: cd scoop && npm install && npm run dev   → http://127.0.0.1:3847
+```
+
+See [docs/scoop.md](docs/scoop.md) and [scoop/README.md](scoop/README.md).
 
 ## What is Shulcrum?
 

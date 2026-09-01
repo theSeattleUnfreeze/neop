@@ -1,0 +1,33 @@
+# Optional Scoop UI + Postgres. Fulcrum/Shulcrum stay on the host (or another compose).
+#   docker compose -f docker-compose.scoop.yml --profile scoop up --build
+services:
+  postgres-scoop:
+    image: postgres:16-alpine
+    profiles: ["scoop"]
+    environment:
+      POSTGRES_USER: scoop
+      POSTGRES_PASSWORD: scoop
+      POSTGRES_DB: scoop
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - scoop-pg:/var/lib/postgresql/data
+
+  scoop:
+    profiles: ["scoop"]
+    build:
+      context: ./scoop
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres-scoop
+    environment:
+      SCOOP_DATABASE_URL: postgres://scoop:scoop@postgres-scoop:5432/scoop
+      FULCRUM_URL: ${FULCRUM_URL:-tcp://host.docker.internal:15001}
+      SHULCRUM_URL: ${SHULCRUM_URL:-tcp://host.docker.internal:15011}
+    ports:
+      - "127.0.0.1:3847:3847"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  scoop-pg:
