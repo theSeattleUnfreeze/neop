@@ -89,8 +89,10 @@ Counts of `both` / protected / pending Knots pass (and related banners for new d
 
 | Port (testnet4) | Dialect |
 |-----------------|---------|
-| `15001` | Legacy: classic 80-byte SHA256d (Fulcrum/electrs) |
-| `15011` | Blake2b: [Shulcrum](https://github.com/Kilombino/Shulcrum) — variable headers, protocol ≥1.6 headers-as-list, `blockchain.pow_algorithms` / 1.7 |
+| `15001` | Core: **Fulcrum** (classic 80-byte SHA256d) — not electrs |
+| `15011` | Knots: [Shulcrum](https://github.com/Kilombino/Shulcrum) — variable headers, protocol ≥1.6 headers-as-list, `blockchain.pow_algorithms` / 1.7 |
+
+Client pairing: Sparrow → Fulcrum; Shrike → Shulcrum. See [wallets.md](wallets.md), [electrum.md](electrum.md).
 
 ## Implemented
 
