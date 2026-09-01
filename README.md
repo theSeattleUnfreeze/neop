@@ -47,6 +47,18 @@ python3 -m neopd --datadir ./data --network testnet4   # JSON-RPC on :18334
 python3 -m pytest -q
 ```
 
+## CLI helpers (`neop_cli`)
+
+Stdlib helpers for Core-bound ceremony and Electrum pairing (sign in Sparrow; no broadcast):
+
+```bash
+PYTHONPATH=. python3 -m neop_cli electrum-endpoints --network testnet4
+PYTHONPATH=. python3 -m neop_cli protect-psbt --help
+PYTHONPATH=. python3 -m unittest discover -s tests -v
+```
+
+See [neop_cli/README.md](neop_cli/README.md) and [docs/replay.md](docs/replay.md).
+
 ## What is Shulcrum?
 
 **Shulcrum** is a fork of [Fulcrum](https://github.com/cculianu/Fulcrum) (Electrum server) for **Blake2b / v2 block headers** on the **Knots** chain ([bitcoinknots/bitcoin#359](https://github.com/bitcoinknots/bitcoin/pull/359)).
