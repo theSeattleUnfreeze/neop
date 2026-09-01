@@ -83,7 +83,10 @@ Never auto-broadcast the same raw tx to both flavors.
 | `getblockchaininfo` | Requires `flavor`; proxies pinned engine |
 | `help` | Method list |
 
-`listcoins` and `sendrawtransaction` land in the catalog-replay PR.
+| `listcoins` | Catalog with flavor_presence / replay_risk |
+| `sendrawtransaction` | Flavor-scoped; default-deny replay; confidence receipt |
+
+Never silent dual-broadcast.
 
 ## Status
 
