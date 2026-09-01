@@ -1,4 +1,4 @@
-"""Minimal stdlib JSON-RPC HTTP server for neopd (shared-store slice)."""
+"""JSON-RPC server: store + engine proxy (no catalog yet)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-from neopd.config import Config
+from neopd.config import Config, parse_flavor
+from neopd.engines import EngineClient, EngineError
 from neopd.store import StoreLayout
 
 JsonDict = Dict[str, Any]
@@ -21,16 +22,37 @@ class RpcError(Exception):
 
 
 class NeopdService:
-    """RPC method implementations for the shared-store slice."""
-
-    def __init__(self, config: Config, store: StoreLayout) -> None:
+    def __init__(
+        self,
+        config: Config,
+        store: StoreLayout,
+        legacy: Optional[EngineClient] = None,
+        blake2b: Optional[EngineClient] = None,
+    ) -> None:
         self.config = config
         self.store = store
+        self.legacy = legacy or EngineClient(
+            config.legacy_rpc_url,
+            config.legacy_rpc_user,
+            config.legacy_rpc_password,
+            flavor="legacy",
+        )
+        self.blake2b = blake2b or EngineClient(
+            config.blake2b_rpc_url,
+            config.blake2b_rpc_user,
+            config.blake2b_rpc_password,
+            flavor="blake2b",
+        )
         self._methods = {
             "getnetwork": self.getnetwork,
             "getstoreinfo": self.getstoreinfo,
+            "getflavors": self.getflavors,
+            "getblockchaininfo": self.getblockchaininfo,
             "help": self.help,
         }
+
+    def _engine(self, flavor: str) -> EngineClient:
+        return self.legacy if flavor == "legacy" else self.blake2b
 
     def help(self, _params: JsonDict) -> Any:
         return sorted(self._methods.keys())
@@ -54,6 +76,44 @@ class NeopdService:
             },
             "indexed_blocks": len(index),
         }
+
+    def getflavors(self, _params: JsonDict) -> Any:
+        leg = self.legacy.health()
+        b2b = self.blake2b.health()
+        return {
+            "network": self.config.network,
+            "flavors": {
+                "legacy": {
+                    "engine": "bitcoin-core",
+                    "status": leg["status"],
+                    "blocks": leg["blocks"],
+                    "headers": leg["headers"],
+                    "error": leg["error"],
+                },
+                "blake2b": {
+                    "engine": "bitcoin-knots-blake2b",
+                    "status": b2b["status"],
+                    "blocks": b2b["blocks"],
+                    "headers": b2b["headers"],
+                    "error": b2b["error"],
+                },
+            },
+        }
+
+    def getblockchaininfo(self, params: JsonDict) -> Any:
+        flavor = parse_flavor(params.get("flavor"))
+        try:
+            info = self._engine(flavor).getblockchaininfo()
+        except EngineError as exc:
+            raise RpcError(-32010, exc.message)
+        if "header_version" not in info:
+            info = dict(info)
+            info["header_version_note"] = (
+                "engine did not report header_version; "
+                "use Knots HeaderV2 RPC (#363) when available"
+            )
+        info["flavor"] = flavor
+        return info
 
     def dispatch(self, method: str, params: JsonDict) -> Any:
         if method not in self._methods:
@@ -89,41 +149,23 @@ def make_handler(service: NeopdService) -> type:
             try:
                 req = json.loads(body.decode("utf-8") or "{}")
             except ValueError:
-                self._write_rpc(
-                    None,
-                    error={"code": -32700, "message": "parse error"},
-                )
+                self._write_rpc(None, error={"code": -32700, "message": "parse error"})
                 return
             req_id = req.get("id")
             method = req.get("method")
             if not isinstance(method, str):
-                self._write_rpc(
-                    req_id,
-                    error={"code": -32600, "message": "invalid request"},
-                )
+                self._write_rpc(req_id, error={"code": -32600, "message": "invalid request"})
                 return
             try:
-                params = _normalize_params(req.get("params"))
-                result = service.dispatch(method, params)
+                result = service.dispatch(method, _normalize_params(req.get("params")))
                 self._write_rpc(req_id, result=result)
             except RpcError as exc:
-                self._write_rpc(
-                    req_id,
-                    error={"code": exc.code, "message": exc.message},
-                )
+                self._write_rpc(req_id, error={"code": exc.code, "message": exc.message})
             except Exception as exc:  # noqa: BLE001
-                self._write_rpc(
-                    req_id,
-                    error={"code": -32000, "message": str(exc)},
-                )
+                self._write_rpc(req_id, error={"code": -32000, "message": str(exc)})
 
-        def _write_rpc(
-            self,
-            req_id: Any,
-            result: Any = None,
-            error: Optional[JsonDict] = None,
-        ) -> None:
-            payload = {"jsonrpc": "2.0", "id": req_id}  # type: JsonDict
+        def _write_rpc(self, req_id, result=None, error=None):
+            payload = {"jsonrpc": "2.0", "id": req_id}  # type: Dict[str, Any]
             if error is not None:
                 payload["error"] = error
             else:
