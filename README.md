@@ -8,7 +8,7 @@ Dual-flavor Bitcoin node and coin-control wallet: live tips on the **Core** chai
 
 Published under [theSeattleUnfreeze](https://github.com/theSeattleUnfreeze). Daemon name: **`neopd`**.
 
-> Status: identity gates + Phase A docs shipped; Phase B `neopd` shared-store scaffolding in stacked PRs. Engines stay pinned upstream — neop does not reimplement Blake2b PoW.
+> Status: identity gates + Phase A docs shipped; Phase B `neopd` core (store, engines, catalog, Electrum wiring). Engines stay pinned upstream — neop does not reimplement Blake2b PoW.
 
 ## Two chains
 
@@ -36,7 +36,7 @@ RPC and config may still use `flavor=blake2b` / `flavor=legacy` as aliases for t
 | `neopd` | Shared archive mux, dual chainstates, flavor RPC, replay-safe send |
 | [Shulcrum](https://github.com/Kilombino/Shulcrum) | Vendored Electrum server for variable Blake2b headers |
 
-Details: [docs/architecture.md](docs/architecture.md) · [docs/store.md](docs/store.md) · [docs/rpc.md](docs/rpc.md) · [docs/testnet4.md](docs/testnet4.md) · [docs/hosting.md](docs/hosting.md)
+Details: [docs/architecture.md](docs/architecture.md) · [docs/store.md](docs/store.md) · [docs/rpc.md](docs/rpc.md) · [docs/testnet4.md](docs/testnet4.md) · [docs/hosting.md](docs/hosting.md) · [docs/electrum.md](docs/electrum.md)
 
 ## `neopd` (dev)
 
