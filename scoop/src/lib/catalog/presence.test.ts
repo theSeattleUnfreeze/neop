@@ -83,6 +83,26 @@ describe("buildRows", () => {
     assert.equal(detectSpills([row]).length, 0);
   });
 
+  it("sums all unspent outputs on a tip", () => {
+    const row = coinRowFromTips(
+      1,
+      null,
+      {
+        tip: "core",
+        scripthash: "00".repeat(32),
+        ok: true,
+        unspent: [
+          { tx_hash: "11".repeat(32), tx_pos: 0, value: 100, height: 1 },
+          { tx_hash: "22".repeat(32), tx_pos: 1, value: 50, height: 1 },
+        ],
+        history: [],
+      },
+      undefined
+    );
+    assert.equal(row.core.valueSats, 150n);
+    assert.equal(row.presence, "core_only");
+  });
+
   it("flags spills when both spent", () => {
     const row = coinRowFromTips(
       1,

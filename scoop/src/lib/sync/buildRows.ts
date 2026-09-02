@@ -1,4 +1,5 @@
 import { annotate, type CoinRow, type TipView } from "@/lib/catalog/presence";
+import { sumUnspent } from "@/lib/catalog/balances";
 import type { ScriptTipSnapshot, UnspentItem } from "@/lib/sync/fetchTip";
 
 function tipViewFromSnapshot(snap: ScriptTipSnapshot | undefined): TipView {
@@ -11,7 +12,8 @@ function tipViewFromSnapshot(snap: ScriptTipSnapshot | undefined): TipView {
       status: "unspent",
       txid: u.tx_hash,
       vout: u.tx_pos,
-      valueSats: BigInt(u.value),
+      // Total of all unspent outputs on this tip for the script
+      valueSats: sumUnspent(snap.unspent),
     };
   }
   if (snap.history.length > 0) {
@@ -24,11 +26,17 @@ function tipViewFromSnapshot(snap: ScriptTipSnapshot | undefined): TipView {
   return { status: "absent" };
 }
 
+export type CoinRowOpts = {
+  accountId?: number | null;
+  watchAccountId?: number | null;
+};
+
 export function coinRowFromTips(
   scriptId: number,
   address: string | null | undefined,
   core: ScriptTipSnapshot | undefined,
-  knots: ScriptTipSnapshot | undefined
+  knots: ScriptTipSnapshot | undefined,
+  opts: CoinRowOpts = {}
 ) {
   const row: CoinRow = {
     scriptId,
@@ -36,7 +44,11 @@ export function coinRowFromTips(
     core: tipViewFromSnapshot(core),
     knots: tipViewFromSnapshot(knots),
   };
-  return annotate(row);
+  return {
+    ...annotate(row),
+    accountId: opts.accountId ?? null,
+    watchAccountId: opts.watchAccountId ?? null,
+  };
 }
 
 export function detectSpills(
