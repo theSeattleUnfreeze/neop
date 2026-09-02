@@ -43,6 +43,26 @@ type Dash = {
   openTaskCount: number;
 };
 
+function TaskSidebar() {
+  const [tasks, setTasks] = useState<{ id: number; title: string; kind: string }[]>([]);
+  useEffect(() => {
+    void fetch("/api/organizer/tasks?status=open")
+      .then((r) => r.json())
+      .then((j) => setTasks((j.tasks ?? []).slice(0, 5)))
+      .catch(() => setTasks([]));
+  }, []);
+  if (!tasks.length) return <p className="muted">No open tasks.</p>;
+  return (
+    <ul className="task-list">
+      {tasks.map((t) => (
+        <li key={t.id} className="task-item">
+          <span className={`kind-pill ${t.kind}`}>{t.kind.replace(/_/g, " ")}</span> {t.title}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function DashboardClient() {
   const [dash, setDash] = useState<Dash | null>(null);
   const [notifs, setNotifs] = useState<Notif[]>([]);
@@ -183,6 +203,16 @@ export function DashboardClient() {
         ) : !error ? (
           <p className="muted">Loading…</p>
         ) : null}
+      </section>
+
+      <section className="scoop-panel">
+        <div className="section-head">
+          <h3>Open tasks</h3>
+          <Link href="/tasks" className="scoop-btn ghost">
+            View all
+          </Link>
+        </div>
+        <TaskSidebar />
       </section>
 
       <section className="scoop-panel">

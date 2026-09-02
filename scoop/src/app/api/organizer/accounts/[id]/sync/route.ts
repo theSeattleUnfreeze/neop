@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import {
   aggregateAccountBalances,
-  portfolioTotals,
   serializeBigints,
 } from "@/lib/catalog/balances";
 import { coinRowFromTips } from "@/lib/sync/buildRows";
 import { envElectrumUrls, fetchScriptTip } from "@/lib/sync/fetchTip";
 import { applyReplayReceiveSync } from "@/lib/organizer/replayNotifications";
+import { suggestTasksFromRows } from "@/lib/organizer/suggestTasks";
 
 export const runtime = "nodejs";
 
@@ -30,7 +30,9 @@ export async function POST(_req: Request, ctx: Ctx) {
   }
 
   const { createDb } = await import("@/lib/db/client");
-  const { organizerAccounts, watchedScripts } = await import("@/lib/db/schema");
+  const { organizerAccounts, organizerTasks, watchedScripts } = await import(
+    "@/lib/db/schema"
+  );
   const db = createDb();
   const [account] = await db
     .select()
@@ -90,6 +92,31 @@ export async function POST(_req: Request, ctx: Ctx) {
     }
   }
 
+  // Upsert non-replay auto tasks (spill / both / core-bound). Replay tasks come from applyReplayReceiveSync.
+  const suggestions = suggestTasksFromRows(rows).filter(
+    (s) => s.kind !== "auto_replay_receive"
+  );
+  let suggestedCount = 0;
+  for (const s of suggestions) {
+    const existing = await db
+      .select()
+      .from(organizerTasks)
+      .where(eq(organizerTasks.dedupeKey, s.dedupeKey))
+      .limit(1);
+    if (existing.length) continue;
+    await db.insert(organizerTasks).values({
+      accountId: account.id,
+      scriptId: s.scriptId,
+      kind: s.kind,
+      status: "open",
+      title: s.title,
+      body: s.body,
+      dedupeKey: s.dedupeKey,
+      metadata: s.metadata ?? null,
+    });
+    suggestedCount += 1;
+  }
+
   await db
     .update(organizerAccounts)
     .set({ lastSyncedAt: new Date(), updatedAt: new Date() })
@@ -114,6 +141,7 @@ export async function POST(_req: Request, ctx: Ctx) {
       rows,
       balance: balances[0],
       newNotifications,
+      suggestedTasks: suggestedCount,
     })
   );
 }
