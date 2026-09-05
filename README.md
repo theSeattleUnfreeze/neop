@@ -64,6 +64,29 @@ Knots marked light-client / Electrum work **out of scope**. neop **vendors and r
 
 Same rule as blocks: **one shared pre-split Electrum index**, flavor-specific deltas after the split — not two full indexes over two full nodes.
 
+## Shared pre-split block archive
+
+Before Blake2b activation, Core and Knots can share one copy of SHA-256d
+`blk*.dat` / `rev*.dat` history. The runtime mux stays in **`neopd`**; the
+filesystem ceremony is [`scripts/archive-blocks.sh`](scripts/archive-blocks.sh)
+(GPL-2.0).
+
+That helper adapts design and safety rules from
+**[FlyTheElephant1/archive-blocks.sh](https://github.com/FlyTheElephant1/archive-blocks.sh)**
+— thanks to FlyTheElephant1 — including idempotent symlinks, never replacing a
+real file with a symlink, permission checks, and a conservative mtime cut-off
+recipe. See [docs/hosting.md](docs/hosting.md).
+
+```bash
+./scripts/archive-blocks.sh -i /path/to/blocks --suggest-cutoff
+./scripts/archive-blocks.sh -i /path/to/blocks -o /path/to/shared/blocks -n 05687
+# Second flavor (no second pre-fork download):
+./scripts/archive-blocks.sh -i /path/to/blocks -o /path/to/shared/blocks \
+  -a /path/to/blocks-knots -n 05687
+```
+
+Operator walkthroughs (new dual-flavor vs existing one-flavor): [docs/hosting.md](docs/hosting.md).
+
 ## Privacy gates (maintainers)
 
 This org must not leak a personal GitHub account. Install the identity CLI from [theSeattleUnfreeze/github-identity](https://github.com/theSeattleUnfreeze/github-identity), then after cloning neop:
@@ -101,6 +124,13 @@ docker compose -f docker-compose.testnet4.yml config
 
 Explorer: [mempool.guide/testnet4](https://mempool.guide/testnet4).
 
+## Credits
+
+- Shared `blk`/`rev` archive ceremony adapted from
+  [FlyTheElephant1/archive-blocks.sh](https://github.com/FlyTheElephant1/archive-blocks.sh)
+  (GPL-2.0). See [`scripts/archive-blocks.LICENSE`](scripts/archive-blocks.LICENSE).
+
 ## License
 
-TBD (will be set when the first feature code lands).
+Repository license TBD. `scripts/archive-blocks.sh` is **GPL-2.0** (derived work;
+see that file and `scripts/archive-blocks.LICENSE`).
