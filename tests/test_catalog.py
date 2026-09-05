@@ -44,13 +44,35 @@ class EvaluateSendTests(unittest.TestCase):
         )
         self.assertEqual(decision, SendDecision.ALLOW)
 
-    def test_dual_effect_escape(self):
+    def test_core_op_return_wedge_allows_legacy_both(self):
+        # Minimal 1-in/2-out tx with OP_RETURN scriptPubKey length 84.
+        tx_hex = (
+            "01000000010000000000000000000000000000000000000000000000000000000000000000"
+            "000000000100ffffffff02e803000000000000000000000000000000546a4c51"
+            + ("41" * 81)
+            + "00000000"
+        )
+        decision = evaluate_send(
+            "legacy",
+            [_coin(FlavorPresence.BOTH)],
+            raw_tx_hex=tx_hex,
+        )
+        self.assertEqual(decision, SendDecision.ALLOW)
+
+    def test_core_wedge_does_not_allow_blake2b(self):
+        tx_hex = (
+            "01000000010000000000000000000000000000000000000000000000000000000000000000"
+            "000000000100ffffffff02e803000000000000000000000000000000546a4c51"
+            + ("41" * 81)
+            + "00000000"
+        )
         decision = evaluate_send(
             "blake2b",
             [_coin(FlavorPresence.BOTH)],
-            allow_dual_effect=True,
+            raw_tx_hex=tx_hex,
         )
-        self.assertEqual(decision, SendDecision.ALLOW)
+        self.assertEqual(decision, SendDecision.REPLAY_RISK_UNRESOLVED)
+
 
     def test_wrong_flavor_only_refused(self):
         decision = evaluate_send(

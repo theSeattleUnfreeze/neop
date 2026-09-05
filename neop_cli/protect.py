@@ -99,8 +99,9 @@ def protect_psbt(
     notes.append("Open PSBT in Sparrow (Fulcrum / Core path), sign, then broadcast Core-only.")
     notes.append("Do not broadcast via Knots / Shrike for this Core-bound ceremony tx.")
     notes.append(
-        "neopd sendrawtransaction does not detect OP_RETURN wedges yet — "
-        "ceremony broadcast is out-of-band (Core engine / Sparrow) until evaluate_send gains wedge parsing."
+        "neopd sendrawtransaction accepts Core OP_RETURN wedges when flavor=legacy "
+        "and catalogued inputs are provided; Knots #357 detection is still planned. "
+        "Prefer Core-engine / Sparrow broadcast for ceremony until protectwallet lands."
     )
     if knots_rpc is not None and not skip_mempool_check:
         notes.append(

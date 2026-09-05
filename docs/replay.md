@@ -56,10 +56,11 @@ Error when unresolved: `replay_risk_unresolved`.
 |------------|--------|
 | Catalog labels (`legacy_only`/`core_only`, `blake2b_only`/`knots_only`, `both`) + `replay_risk` | Wired in `neopd` (`listcoins`; RPC may still emit `legacy_*` / `blake2b_*`) |
 | Default-deny send for all-`both` inputs without unique-input or `allow_dual_effect` | Wired (`sendrawtransaction` → `evaluate_send`) |
-| Wedge-aware send (OP_RETURN > 83 / #357 sighash detection) | **Planned** — normative here; not yet parsed in `evaluate_send` |
+| Core OP_RETURN wedge detection (scriptPubKey > 83) on `flavor=legacy` | Wired (`neopd.wedges` → `evaluate_send`) |
+| Knots #357 sighash wedge detection | **Planned** |
 | `protectwallet` / `getreplaystatus` | **Planned** — RPC stubs in [rpc.md](rpc.md) |
 
-Until wedge detection lands, Core-bound `protectwallet` consolidations and ordinary wedge sends remain **manual / out-of-band** (or use unique-input / explicit `allow_dual_effect` through the live RPC).
+Core-bound ceremony txs with an embedded OP_RETURN wedge may go through `neopd sendrawtransaction` when `flavor=legacy` and `inputs` are catalogued. Knots-bound #357 and full `protectwallet` orchestration remain out-of-band / planned.
 
 ## One-time wallet protection (`protectwallet`)
 

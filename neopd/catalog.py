@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Iterable, List, Optional, Sequence
 
+from neopd.wedges import has_core_bound_op_return_wedge
+
 
 class FlavorPresence(str, Enum):
     LEGACY_ONLY = "legacy_only"
@@ -74,12 +76,16 @@ def evaluate_send(
     flavor: str,
     inputs: Sequence[Coin],
     allow_dual_effect: bool = False,
+    raw_tx_hex: Optional[str] = None,
 ) -> SendDecision:
     """Default-deny spends that remain valid on the other tip.
 
     Allow when:
     - allow_dual_effect is True (explicit dual-effect escape), or
-    - at least one input is spendable only on the selected flavor (unique-input).
+    - at least one input is spendable only on the selected flavor (unique-input), or
+    - flavor is legacy (Core) and raw_tx_hex embeds an OP_RETURN scriptPubKey > 83 bytes.
+
+    Knots #357 sighash wedge detection is not implemented yet.
     """
     if flavor not in ("legacy", "blake2b"):
         raise ValueError("flavor must be legacy|blake2b")
@@ -89,10 +95,14 @@ def evaluate_send(
         return SendDecision.ALLOW
     if any(coin_spendable_only_on(c, flavor) for c in inputs):
         return SendDecision.ALLOW
-    # All inputs are BOTH (or wrong-flavor-only): refuse.
+    if (
+        flavor == "legacy"
+        and raw_tx_hex
+        and has_core_bound_op_return_wedge(raw_tx_hex)
+    ):
+        return SendDecision.ALLOW
     if all(c.flavor_presence is FlavorPresence.BOTH for c in inputs):
         return SendDecision.REPLAY_RISK_UNRESOLVED
-    # Wrong-flavor-only inputs are also unresolved for this tip.
     return SendDecision.REPLAY_RISK_UNRESOLVED
 
 
