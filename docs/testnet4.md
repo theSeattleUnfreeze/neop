@@ -36,10 +36,10 @@ Regtest does not replace testnet4 for wallet UX; testnet4 does not replace regte
 - [ ] `neopd getflavors` / dual `getblockchaininfo` healthy.
 - [ ] Shared store has one copy of shared SHA-256 history; disk size is not ~2× a single node.
 - [ ] Electrum ports return history for a faucet-funded address on both flavors.
-- [ ] Coin catalog labels `legacy_only` / `blake2b_only` / `both` correctly after a controlled split.
-- [ ] Replay-exposed spend is refused without explicit dual-effect authorization.
-- [ ] **Isolation proof:** after a flavor-scoped send, the other tip’s balance/UTXO set is unchanged and the other mempool does not contain the txid.
-- [ ] Confidence receipt returned (`other_flavor_affected: false`).
+- [ ] Coin catalog labels `legacy_only` / `blake2b_only` / `both` (Core-only / Knots-only / both) correctly after a controlled split.
+- [ ] Replay-exposed spend is refused without unique-input, wedge, or explicit dual-effect authorization ([replay.md](replay.md)).
+- [ ] **Isolation proof:** after a flavor-scoped send, the other tip’s balance/UTXO set is unchanged and the other mempool does not contain the txid ([replay.md](replay.md)).
+- [ ] Confidence receipt returned (`other_flavor_affected: false`; see [replay.md](replay.md)).
 - [ ] Pasting the same raw tx into the other flavor’s RPC fails accept/mempool.
 - [ ] Clients can send tBTC on the chosen flavor; explorer links resolve on mempool.guide/testnet4.
 - [ ] No mainnet RPC URLs or datadirs in the testnet4 compose profile.

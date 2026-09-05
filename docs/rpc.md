@@ -101,9 +101,8 @@ Counts of `both` / protected / pending Knots pass (and related banners for new d
 | `getflavors` | Dual engine health |
 | `getblockchaininfo` | Requires `flavor`; proxies pinned engine |
 | `help` | Method list |
-
 | `listcoins` | Catalog with flavor_presence / replay_risk |
-| `sendrawtransaction` | Flavor-scoped; default-deny replay; confidence receipt |
+| `sendrawtransaction` | Flavor-scoped; default-deny replay (unique-input today; wedge detection planned); confidence receipt |
 
 Never silent dual-broadcast.
 

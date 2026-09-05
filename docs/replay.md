@@ -50,6 +50,17 @@ Rules for `neopd` (and any client that must not bypass it):
 
 Error when unresolved: `replay_risk_unresolved`.
 
+## Implementation status
+
+| Capability | Status |
+|------------|--------|
+| Catalog labels (`legacy_only` / `blake2b_only` / `both`) + `replay_risk` | Wired in `neopd` (`listcoins`) |
+| Default-deny send for all-`both` inputs without unique-input or `allow_dual_effect` | Wired (`sendrawtransaction` → `evaluate_send`) |
+| Wedge-aware send (OP_RETURN > 83 / #357 sighash detection) | **Planned** — normative here; not yet parsed in `evaluate_send` |
+| `protectwallet` / `getreplaystatus` | **Planned** — RPC stubs in [rpc.md](rpc.md) |
+
+Until wedge detection lands, Core-bound `protectwallet` consolidations and ordinary wedge sends remain **manual / out-of-band** (or use unique-input / explicit `allow_dual_effect` through the live RPC).
+
 ## One-time wallet protection (`protectwallet`)
 
 Goal: partition replay-exposed coins once so users are not prompted on every spend.

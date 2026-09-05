@@ -38,7 +38,7 @@ Do **not** fork Blake2b hashing into neop. Testnet4 Electrum ports: `15001` (leg
 
 ## Replay ethos (product core)
 
-Same network magic means wire isolation alone is not enough. Protection is layered and **default-deny**. Normative detail: **[docs/replay.md](replay.md)**.
+Same network magic means wire isolation alone is not enough. Protection is layered and **default-deny**. Normative detail: **[replay.md](replay.md)**.
 
 1. Catalog labels: `core_only` | `knots_only` | `both` (replay-exposed; RPC may still say `legacy_only` / `blake2b_only`)
 2. Refuse spends still valid on the non-selected tip unless unique-input, an embedded **wedge**, or `allow_dual_effect: true`
