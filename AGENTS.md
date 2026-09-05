@@ -130,7 +130,7 @@ Apply on every Real Steel pass for this repo. Prefer fund / privacy / replay saf
 - **Wrapper-first** — PRs must not reimplement Blake2b PoW, v2 header hashing, consensus policy, or mining/DATUM; engines stay pinned upstream
 - **Replay safety** — catalog / send paths default-deny dual-effect (`both`) UTXOs; no silent dual-broadcast; confidence receipts stay honest (`other_flavor_affected`)
 - **Chain naming** — user-facing and docs say **Core** / **Knots** (RPC may still say `legacy` / `blake2b`); reject “Corecoin”-style coin names
-- **Shared pre-split archive** — `scripts/archive-blocks.sh` keeps FlyTheElephant1 safety rules (idempotent symlinks, never clobber a real file, permission checks, conservative cut-off); Blake2b tip files stay out of the shared archive
+- **Shared pre-split archive** — `scripts/archive-blocks.sh` keeps FlyTheElephant1 safety rules (idempotent symlinks, never clobber a real file, permission checks, conservative cut-off); Blake2b tip files stay out of the shared archive; bootstrap must not force a second pre-fork IBD or reindex an already-supported flavor’s chainstate
 - **Secrets & placeholders** — no `.env` / RPC creds in the tree; docs use `STARTOS_HOST` / `VPS_PUBLIC_IP`-style placeholders
 - **Electrum split** — Fulcrum for Core, Shulcrum for Knots; do not fork Blake2b hashing into `neopd`
 - **Scoop threat model** — bind defaults stay loopback; no private keys; xpubs/descriptors treated as sensitive

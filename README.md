@@ -80,7 +80,12 @@ recipe. See [docs/hosting.md](docs/hosting.md).
 ```bash
 ./scripts/archive-blocks.sh -i /path/to/blocks --suggest-cutoff
 ./scripts/archive-blocks.sh -i /path/to/blocks -o /path/to/shared/blocks -n 05687
+# Second flavor (no second pre-fork download):
+./scripts/archive-blocks.sh -i /path/to/blocks -o /path/to/shared/blocks \
+  -a /path/to/blocks-knots -n 05687
 ```
+
+Operator walkthroughs (new dual-flavor vs existing one-flavor): [docs/hosting.md](docs/hosting.md).
 
 ## Privacy gates (maintainers)
 

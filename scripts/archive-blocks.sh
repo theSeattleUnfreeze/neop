@@ -140,18 +140,22 @@ ensure_dir_and_perms() {
   local target=$1
   local label=$2
 
+  local in_owner in_mode
+  in_owner=$(stat_owner "$IN_DIR")
+  in_mode=$(stat_mode "$IN_DIR")
+
   if [[ ! -d "$target" ]]; then
     echo "Creating $label: $target"
     if ! $DRY_RUN; then
       mkdir -p "$target"
+      # Match reference mode so a fresh umask does not fail the check below.
+      chmod "$in_mode" "$target" 2>/dev/null || true
     else
       return 0
     fi
   fi
 
-  local in_owner in_mode out_owner out_mode
-  in_owner=$(stat_owner "$IN_DIR")
-  in_mode=$(stat_mode "$IN_DIR")
+  local out_owner out_mode
   out_owner=$(stat_owner "$target")
   out_mode=$(stat_mode "$target")
 
@@ -168,6 +172,36 @@ ensure_dir_and_perms() {
     exit 1
   fi
   echo "Permissions OK on $label."
+}
+
+fs_dev() {
+  local p=$1
+  if stat -c '%d' "$p" >/dev/null 2>&1; then
+    stat -c '%d' "$p"
+  else
+    stat -f '%d' "$p"
+  fi
+}
+
+free_bytes() {
+  local p=$1
+  # Portable: df -k, take available KiB from last line, convert to bytes.
+  df -k "$p" | awk 'END{print $4 * 1024}'
+}
+
+ensure_free_space() {
+  local needed=$1
+  local dest=$2
+  local free
+  free=$(free_bytes "$dest")
+  if (( free < needed )); then
+    echo
+    echo "ERROR: Not enough free space on destination filesystem ($dest)."
+    echo "  Required : $(human_bytes "$needed")"
+    echo "  Available: $(human_bytes "$free")"
+    echo
+    exit 1
+  fi
 }
 
 # Never overwrite a real file with a symlink (FlyTheElephant1 rule).
@@ -306,10 +340,10 @@ if [[ -n "$ADD_DIR" ]]; then
     if ! $DRY_RUN; then cp -a "$IN_DIR/xor.dat" "$ADD_DIR/xor.dat"; fi
   fi
 
-  if [[ -d "$IN_DIR/index" && ! -d "$ADD_DIR/index" ]]; then
-    echo "Copying index/ (only valid if tip files after $MAX_FILE match the reference)."
-    echo "If this flavor will diverge, delete index/ before starting the node."
-    if ! $DRY_RUN; then cp -a "$IN_DIR/index" "$ADD_DIR/index"; fi
+  # Dual-flavor tips diverge after the cut-off. Copying blocks/index from the
+  # reference flavor would poison the other side — leave rebuild to the engine.
+  if [[ -d "$IN_DIR/index" ]]; then
+    echo "Skipping blocks/index/ copy (other flavor must rebuild its own block index)."
   fi
 
   if [[ -e "$ADD_DIR/.lock" ]]; then
@@ -320,6 +354,8 @@ if [[ -n "$ADD_DIR" ]]; then
   echo
   echo "Bootstrap complete."
   echo "chainstate/ and Electrum indexes are NOT handled here — neopd / engines own those."
+  echo "Expect a full chainstate build on the NEW flavor only; keep the existing flavor's"
+  echo "chainstate untouched. Shared pre-split blk/rev need not be re-downloaded."
   exit 0
 fi
 
@@ -354,6 +390,14 @@ if [[ ${#FILES_TO_MOVE[@]} -eq 0 ]]; then
   echo "No files need to be moved (already archived or missing from source)."
 else
   echo "Data still to archive: $(human_bytes "$NEEDED_BYTES")"
+  in_dev=$(fs_dev "$IN_DIR")
+  out_dev=$(fs_dev "$OUT_DIR")
+  if [[ "$in_dev" == "$out_dev" ]]; then
+    echo "Source and archive on the same filesystem — mv will be instant."
+  else
+    echo "Source and archive on different filesystems — checking free space."
+    ensure_free_space "$NEEDED_BYTES" "$OUT_DIR"
+  fi
   for entry in "${FILES_TO_MOVE[@]}"; do
     IFS='|' read -r src dst <<<"$entry"
     echo "  mv $(basename "$src") → archive"

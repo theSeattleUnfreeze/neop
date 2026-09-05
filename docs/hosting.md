@@ -67,5 +67,34 @@ mtime-based cut-off recipe.
 
 Do **not** put post–Blake2b (v2-header) tip files in the shared archive.
 Stop nodes before archive mode if the newest `blk*.dat` may still be open.
+Bootstrap mode does **not** copy `blocks/index/` (each flavor rebuilds its own)
+and does **not** touch `chainstate-*` or Electrum indexes.
+
+### Operator stories (what this ceremony buys you)
+
+**Completely new dual-flavor operator**
+
+1. IBD **once** on SHA-256d history into one engine’s `blocks/` (or let `neopd`
+   compose drive the first tip).
+2. Choose a conservative cut-off (`--suggest-cutoff`), archive ≤ cut-off into
+   `data/<network>/blocks/`, symlink the first tip back.
+3. Bootstrap the other tip (`blocks-core/` or `blocks-knots/`) with `-a` so
+   pre-fork `blk`/`rev` are shared — no second download of common history.
+4. Let each engine grow **private tip files** after the cut-off and build its
+   own `chainstate-*`.
+5. Run **Fulcrum** (Core) and **Shulcrum** (Knots) against those tips; point
+   Sparrow / Shrike (or your preferred wallets) at the matching Electrum ports.
+
+**Existing one-flavor operator**
+
+1. Stop the synced node. Archive its pre-split `blk`/`rev` into the shared
+   archive; existing tip keeps working via symlinks (no reindex of the side
+   you already support; no re-download of shared pre-fork files).
+2. Bootstrap the **other** flavor’s `blocks-*` with `-a`.
+3. Expect to **download and index only the other side’s post-split tip**, and
+   to build a **full chainstate for that other flavor only**.
+4. Do **not** reindex the already-supported flavor’s chainstate, and do **not**
+   reindex shared pre-fork headers/PoW history for either flavor — they share
+   the same SHA-256d archive through the cut-off.
 
 Placeholders in examples: `STARTOS_HOST`, `USB_DATADIR`, `VPS_PUBLIC_IP` — never commit real hostnames or credentials.
