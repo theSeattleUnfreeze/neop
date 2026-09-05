@@ -50,7 +50,7 @@ Required:
 
 Behavior:
 
-1. If the tx would still be valid on the non-selected tip → error `replay_risk_unresolved` unless unique-input, the correct chain wedge (Core: OP_RETURN scriptPubKey > 83 bytes; Knots: #357 sighash when live), or `allow_dual_effect: true` (logged / UI-gated; never the default).
+1. If the tx would still be valid on the non-selected tip → error `replay_risk_unresolved` unless **live today:** unique-input or `allow_dual_effect: true` (logged / UI-gated; never the default). **Planned:** also accept an embedded chain wedge once `evaluate_send` parses it (Core: OP_RETURN scriptPubKey > 83 bytes; Knots: #357 sighash when live). See [replay.md](replay.md) Implementation status.
 2. Broadcast **only** to the selected flavor’s P2P/mempool.
 3. On success, return a **confidence receipt**:
 

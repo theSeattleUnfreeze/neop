@@ -54,7 +54,7 @@ Error when unresolved: `replay_risk_unresolved`.
 
 | Capability | Status |
 |------------|--------|
-| Catalog labels (`legacy_only` / `blake2b_only` / `both`) + `replay_risk` | Wired in `neopd` (`listcoins`) |
+| Catalog labels (`legacy_only`/`core_only`, `blake2b_only`/`knots_only`, `both`) + `replay_risk` | Wired in `neopd` (`listcoins`; RPC may still emit `legacy_*` / `blake2b_*`) |
 | Default-deny send for all-`both` inputs without unique-input or `allow_dual_effect` | Wired (`sendrawtransaction` → `evaluate_send`) |
 | Wedge-aware send (OP_RETURN > 83 / #357 sighash detection) | **Planned** — normative here; not yet parsed in `evaluate_send` |
 | `protectwallet` / `getreplaystatus` | **Planned** — RPC stubs in [rpc.md](rpc.md) |
