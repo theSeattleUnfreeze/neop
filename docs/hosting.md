@@ -32,12 +32,40 @@ Primary runtime is **Linux**. Thin macOS hosts run neop via Colima/VM; datadir m
 ```
 data/
   testnet4/
-    blocks/                 # shared SHA-256 archive
+    blocks/                 # shared SHA-256d archive (blk/rev ≤ cut-off)
+    blocks-core/            # Core tip: symlinks into blocks/ + private tip files
+    blocks-knots/           # Knots tip: same pattern (post-Blake2b tip is private)
     chainstate-legacy/
     chainstate-blake2b/
     electrum/
   main/                     # gated; not for early development
     …
 ```
+
+### Shared pre-split `blk` / `rev` ceremony
+
+`neopd` is the runtime mux; the one-shot filesystem ceremony for a shared
+SHA-256d archive lives in [`scripts/archive-blocks.sh`](../scripts/archive-blocks.sh).
+
+That helper adapts safety rules from
+[FlyTheElephant1/archive-blocks.sh](https://github.com/FlyTheElephant1/archive-blocks.sh)
+(GPL-2.0): idempotent symlinks, never overwrite a real file with a symlink,
+owner/mode checks against the reference `blocks/` dir, and a conservative
+mtime-based cut-off recipe.
+
+```bash
+# Suggest a cut-off (file numbers are NOT heights):
+./scripts/archive-blocks.sh -i /path/to/node/blocks --suggest-cutoff
+
+# Move ≤ cut-off into the shared archive; leave symlinks in the source:
+./scripts/archive-blocks.sh -i /path/to/node/blocks -o /path/to/shared/blocks -n 05687
+
+# Bootstrap a second flavor's blocks/ as symlinks into the archive:
+./scripts/archive-blocks.sh -i /path/to/node/blocks -o /path/to/shared/blocks \
+  -a /path/to/blocks-knots -n 05687
+```
+
+Do **not** put post–Blake2b (v2-header) tip files in the shared archive.
+Stop nodes before archive mode if the newest `blk*.dat` may still be open.
 
 Placeholders in examples: `STARTOS_HOST`, `USB_DATADIR`, `VPS_PUBLIC_IP` — never commit real hostnames or credentials.

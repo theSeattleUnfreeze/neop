@@ -22,6 +22,12 @@ Neapolitan is a **wrapper** around pinned Bitcoin validation engines, not a cons
 - Wallet UX glue (confidence receipts, ceremony / unique-input rules)
 - Electrum: speak the **Shulcrum** dialect on the blake2b port; classic Fulcrum/electrs assumptions on legacy
 
+Ops bootstrap for the shared `blk`/`rev` archive (symlinks, cut-off, never
+clobber real files) is a **one-shot script**, not `neopd`: see
+[`scripts/archive-blocks.sh`](../scripts/archive-blocks.sh) and
+[hosting.md](hosting.md). Adapted from
+[FlyTheElephant1/archive-blocks.sh](https://github.com/FlyTheElephant1/archive-blocks.sh).
+
 ## Electrum
 
 Knots marked light clients out of scope. Upstream Fulcrum rejected Blake2b headers ([cculianu/Fulcrum#327](https://github.com/cculianu/Fulcrum/issues/327)).
