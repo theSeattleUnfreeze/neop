@@ -16,7 +16,7 @@ Use **[Fulcrum](https://github.com/cculianu/Fulcrum)** against the legacy / Core
 
 ## Shulcrum (Knots chain) — required
 
-Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) (`blake2b-headers`):
+Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) (`blake2b-headers`). Clone/build steps: [vendor/README.md](../vendor/README.md).
 
 - Variable header length (80 or ~164) per version bit 31
 - Protocol ≥1.6: `blockchain.block.headers` as a **list of hex strings**

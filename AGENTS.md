@@ -130,6 +130,8 @@ See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [d
 
 Apply on every Real Steel pass for this repo. Prefer fund / privacy / replay safety over feature velocity. Run gates in [`PRE_COMMIT_GATE.md`](PRE_COMMIT_GATE.md) before any push from a pass.
 
+**Disposition (required before merge):** every Critical / Suggestion / Nit is **Blocking** (fix in the PR), **Deferred** (open a GitHub issue and link it from the PR), or **Won't do** (one-line rationale on the PR). Never leave deferred findings as PR-only comments or untracked TODOs. See [`.cursor/rules/real-steel-disposition.mdc`](.cursor/rules/real-steel-disposition.mdc).
+
 - **Anonymity** — author/committer, remotes, `gh` user, PR fingerprint, and commit messages must not leak a personal identity; `.identity` hooks must remain enforceable (no `--no-verify`)
 - **Wrapper-first** — PRs must not reimplement Blake2b PoW, v2 header hashing, consensus policy, or mining/DATUM; engines stay pinned upstream
 - **Replay safety** — catalog / send paths default-deny dual-effect (`both`) UTXOs; no silent dual-broadcast; confidence receipts stay honest (`other_flavor_affected`)

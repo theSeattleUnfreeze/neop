@@ -1,0 +1,17 @@
+---
+description: Real Steel / review findings must be fixed in-PR or tracked as GitHub issues
+alwaysApply: true
+---
+
+# Real Steel disposition (fix or issue)
+
+When closing a PR after Real Steel (or any structured review with Critical / Suggestion / Nit):
+
+1. **Triage every item.** Assign exactly one bucket: **Blocking**, **Deferred**, or **Won't do**.
+2. **Blocking** — implement in this PR before merge.
+3. **Deferred** — open a **GitHub issue** in `theSeattleUnfreeze/neop` with the finding text, PR link, and acceptance criteria. Link that issue from the PR (comment or body). Do **not** leave deferred items as PR-only comments, vague TODOs, or “follow-up later” with no issue.
+4. **Won't do** — record a one-line rationale on the PR (comment). No issue required.
+5. **Critical** findings are Blocking unless the maintainer explicitly marks Won't do with rationale.
+6. Before claiming “ready for merge,” post a short disposition table: item → bucket → commit and/or issue URL.
+
+Anon identity applies to issues and PR comments (`theSeattleUnfreeze` only).

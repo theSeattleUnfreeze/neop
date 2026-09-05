@@ -17,7 +17,7 @@ Intended services (images pinned when engines land):
 | `bitcoind-legacy` | Bitcoin Core `-testnet4` (legacy engine) |
 | `bitcoind-blake2b` | Knots pinned to Blake2b hardfork work (`-testnet4`) |
 | `neopd` | Mux + replay-safe RPC (localhost) |
-| Electrum (later) | Legacy `:15001`, Blake2b/Shulcrum `:15011` |
+| Electrum (profile `electrum`) | Core **Fulcrum** `:15001`, Knots **Shulcrum** `:15011` (images still placeholders — track pin/wiring in issues) |
 
 Datadirs under `./data/testnet4/{blocks,chainstate-legacy,chainstate-blake2b,electrum}` — never reuse a mainnet volume.
 

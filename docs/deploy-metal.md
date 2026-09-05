@@ -41,7 +41,7 @@ Stop nodes before moving open `blk*.dat` files. Use [`scripts/archive-blocks.sh`
 
 ### 1. You already have Core (or pre-RDTS Knots) with full blocks
 
-1. Archive pre-split history into shared `blocks/` via `archive-blocks.sh`; keep your existing Core tip working via symlinks.
+1. Archive pre-split history into shared `blocks/` via [`archive-blocks.sh`](../scripts/archive-blocks.sh); keep your existing Core tip working via symlinks.
 2. Bootstrap **Blake2b Knots** `blocks-knots/` with `-a` (same `blocksdir`; no second download of shared pre-fork files).
 3. Sync / activate the Blake2b tip (`blake2b-shard/` after the split).
 4. Build **only** `chainstate-blake2b` for the new flavor (`-reindex-chainstate` if needed). Do **not** reindex `chainstate-legacy` or shared pre-fork headers — do **not** re-download blocks.

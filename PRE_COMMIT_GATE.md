@@ -69,5 +69,6 @@ Before **`gh pr create`**, marking a PR ready, merging to **`main`**, or a Real 
 2. Confirm `git log -1 --format='%an <%ae>'` is theSeattleUnfreeze noreply.
 3. Confirm PR body uses the anon Cursor conversation id only (see AGENTS.md).
 4. Prefer CI green when Actions are available (`.github/workflows/ci.yml`).
+5. **Review disposition:** every Real Steel (or equivalent) Critical / Suggestion / Nit is fixed in the PR, tracked in a **GitHub issue** (Deferred), or marked Won't do with rationale on the PR — see AGENTS.md and [`.cursor/rules/real-steel-disposition.mdc`](.cursor/rules/real-steel-disposition.mdc).
 
 Draft WIP pushes may skip Scoop build / full CI wait, but **must not** skip identity hooks or invent personal attribution.
