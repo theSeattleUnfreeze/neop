@@ -39,3 +39,5 @@ Compose stubs (when Phase B Electrum wiring is merged) should map host ports `15
 ## Trust
 
 You still verify Fulcrum and Shulcrum builds and that each wallet is connected to the intended server before broadcasting. Shared block storage does not replace that check.
+
+Clone/build: [vendor/README.md](../vendor/README.md) (Shulcrum); Fulcrum per [upstream README](https://github.com/cculianu/Fulcrum).

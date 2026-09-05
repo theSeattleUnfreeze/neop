@@ -22,6 +22,6 @@ Required dialect surfaces:
 
 `vendor/Shulcrum/` is gitignored when cloned locally; pin a commit hash in compose when an image is published.
 
-## Fulcrum (legacy Electrum)
+## Fulcrum (Core Electrum)
 
-Stock Fulcrum or electrs on port 15001 (testnet4), classic 80-byte headers only.
+Use **[Fulcrum](https://github.com/cculianu/Fulcrum)** only on port 15001 (testnet4) — classic 80-byte SHA-256d headers. Do not recommend electrs in neop deployments. Build/run per upstream README; point at the Core/legacy engine RPC and neop datadir Electrum index when wired.

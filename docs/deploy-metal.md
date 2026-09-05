@@ -24,7 +24,7 @@ data/<network>/
   electrum/               # Fulcrum + Shulcrum data (pre-split index + deltas when wired)
 ```
 
-Aligns with [hosting.md](hosting.md). Placeholders only in examples: `STARTOS_HOST`, `USB_DATADIR`, `VPS_PUBLIC_IP`.
+Per-flavor tip dirs (`blocks-core/`, `blocks-knots/`) symlink into `blocks/` for shared pre-fork history — see [hosting.md](hosting.md) and [`scripts/archive-blocks.sh`](../scripts/archive-blocks.sh). Placeholders only in examples: `STARTOS_HOST`, `USB_DATADIR`, `VPS_PUBLIC_IP`.
 
 | Asset | Reuse? | Notes |
 |-------|--------|--------|
@@ -33,20 +33,24 @@ Aligns with [hosting.md](hosting.md). Placeholders only in examples: `STARTOS_HO
 | Post–Blake2b v2 `blk` files | **Separate shard** | Cannot share classic 80-byte header layout |
 | Peers / wallets | Per-engine datadir | Do not share `wallet.dat` across tips |
 
+## Shared archive ceremony
+
+Stop nodes before moving open `blk*.dat` files. Use [`scripts/archive-blocks.sh`](../scripts/archive-blocks.sh) (adapted from [FlyTheElephant1/archive-blocks.sh](https://github.com/FlyTheElephant1/archive-blocks.sh)) to archive pre-split `blk`/`rev` into shared `blocks/`, symlink the first tip back, and bootstrap the other flavor with `-a`. Bootstrap mode does **not** copy `blocks/index/` and does **not** touch existing `chainstate-*` or Electrum indexes. Step-by-step: [hosting.md](hosting.md#shared-pre-split-blk--rev-ceremony).
+
 ## Operator paths
 
 ### 1. You already have Core (or pre-RDTS Knots) with full blocks
 
-1. Point shared `blocks/` at that archive.
-2. Add **Blake2b Knots** with a new datadir and the same `blocksdir`.
+1. Archive pre-split history into shared `blocks/` via `archive-blocks.sh`; keep your existing Core tip working via symlinks.
+2. Bootstrap **Blake2b Knots** `blocks-knots/` with `-a` (same `blocksdir`; no second download of shared pre-fork files).
 3. Sync / activate the Blake2b tip (`blake2b-shard/` after the split).
-4. Rebuild only `chainstate-blake2b` if needed (`-reindex-chainstate`) — do **not** re-download blocks.
+4. Build **only** `chainstate-blake2b` for the new flavor (`-reindex-chainstate` if needed). Do **not** reindex `chainstate-legacy` or shared pre-fork headers — do **not** re-download blocks.
 
 ### 2. You already have Blake2b Knots with full blocks (e.g. StartOS)
 
-1. Copy or mount blocks onto the **Linux neop host**. StartOS remains an optional SHA-256 peer per [hosting.md](hosting.md) — not the dual-flavor wallet host.
-2. Run a **legacy engine** (Core v29 or pre-RDTS Knots) with shared `blocksdir` + new `chainstate-legacy`.
-3. Expect a **chainstate rebuild** on Core, not a second IBD.
+1. Copy or mount blocks onto the **Linux neop host**; run the archive ceremony into shared `blocks/` per above. StartOS remains an optional SHA-256 peer per [hosting.md](hosting.md) — not the dual-flavor wallet host.
+2. Bootstrap **Core** `blocks-core/` with `-a`; run a **legacy engine** (Core v29 or pre-RDTS Knots) with shared `blocksdir` + new `chainstate-legacy`.
+3. Expect a **chainstate rebuild on Core only** — not a second IBD. Do **not** reindex `chainstate-blake2b` for the side you already support.
 4. Wallets: **Sparrow → Fulcrum** (Core). **Shrike → Shulcrum** (Knots). Never point stock Sparrow at Blake2b Knots RPC or at Shulcrum’s Blake2b tip.
 
 ### 3. Fresh neop compose
