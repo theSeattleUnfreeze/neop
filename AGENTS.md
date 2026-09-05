@@ -110,9 +110,11 @@ Pin engine versions; **do not reimplement** Blake2b PoW, v2 header crypto, conse
 | **`neopd`** | Shared pre-split SHA-256 archive mux, dual chainstates, flavor-scoped RPC, replay-safe catalog/send, wallet UX glue | Consensus crypto, mining/DATUM |
 | Electrum | Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) for **Knots chain**; classic Fulcrum/electrs for **Core chain** | Forking Blake2b hashing into neop |
 
-**Ethos:** the user picks a chain; **only that chain is affected** by a spend. Default-deny replay-exposed UTXOs present on **both** chains; ceremony / unique inputs; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
+**Ethos:** the user picks a chain; **only that chain is affected** by a spend. Default-deny replay-exposed UTXOs present on **both** chains; ceremony / unique inputs / wedges; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
 
-See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/testnet4.md](docs/testnet4.md), [docs/hosting.md](docs/hosting.md).
+**Replay (agents):** Core-bound wedge = `OP_RETURN` scriptPubKey **> 83 bytes**; Knots-bound wedge = opt-in sighash ([#357](https://github.com/bitcoinknots/bitcoin/pull/357)) when enforced; one-time `protectwallet` partitions `both` coins. Normative: [docs/replay.md](docs/replay.md).
+
+See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/replay.md](docs/replay.md), [docs/testnet4.md](docs/testnet4.md), [docs/hosting.md](docs/hosting.md).
 
 ### Conventions
 

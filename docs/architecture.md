@@ -38,14 +38,15 @@ Do **not** fork Blake2b hashing into neop. Testnet4 Electrum ports: `15001` (leg
 
 ## Replay ethos (product core)
 
-Same network magic means wire isolation alone is not enough. Protection is layered and **default-deny**:
+Same network magic means wire isolation alone is not enough. Protection is layered and **default-deny**. Normative detail: **[replay.md](replay.md)**.
 
-1. Catalog labels: `legacy_only` | `blake2b_only` | `both` (replay-exposed)
-2. Refuse spends still valid on the non-selected tip unless `allow_dual_effect: true`
-3. Unique-input / split ceremony for `both` coins
-4. Broadcast only to the selected flavor’s mempool
-5. Confidence receipt: `{ flavor, txid, other_flavor_affected: false }`
-6. Adopt Knots #357 sighash when enforced so txs are invalid on the other tip
+1. Catalog labels: `core_only` | `knots_only` | `both` (replay-exposed; RPC may still say `legacy_only` / `blake2b_only`)
+2. Refuse spends still valid on the non-selected tip unless unique-input, an embedded **wedge**, or `allow_dual_effect: true`
+3. **Core-bound wedge:** `OP_RETURN` scriptPubKey **> 83 bytes** (invalid on Knots reduced-data / RDTS policy)
+4. **Knots-bound wedge:** opt-in Knots sighash ([#357](https://github.com/bitcoinknots/bitcoin/pull/357)) when enforced
+5. One-time `protectwallet` ceremony to partition `both` UTXOs; unique-input thereafter
+6. Broadcast only to the selected chain’s mempool
+7. Confidence receipt: `{ chain, txid, other_chain_affected: false }` (RPC may still say `flavor` / `other_flavor_affected`)
 
 Never silent dual-broadcast. Never claim PoW alone stops replays.
 

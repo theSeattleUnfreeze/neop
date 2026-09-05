@@ -145,7 +145,8 @@ class NeopdService:
             raise RpcError(
                 -32021,
                 "replay_risk_unresolved: spend still valid on other tip "
-                "(use unique inputs, ceremony, or allow_dual_effect)",
+                "(live: unique inputs or allow_dual_effect; "
+                "OP_RETURN/#357 wedge detection not wired yet — see docs/replay.md)",
             )
         try:
             txid = self._engine(flavor).sendrawtransaction(hexstring)
