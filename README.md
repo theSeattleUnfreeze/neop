@@ -36,7 +36,7 @@ RPC and config may still use `flavor=blake2b` / `flavor=legacy` as aliases for t
 | `neopd` | Shared archive mux, dual chainstates, flavor RPC, replay-safe send |
 | [Shulcrum](https://github.com/Kilombino/Shulcrum) | Vendored Electrum server for variable Blake2b headers |
 
-Details: [docs/architecture.md](docs/architecture.md) · [docs/store.md](docs/store.md) · [docs/replay.md](docs/replay.md) · [docs/rpc.md](docs/rpc.md) · [docs/testnet4.md](docs/testnet4.md) · [docs/hosting.md](docs/hosting.md) · [docs/electrum.md](docs/electrum.md)
+Details: [docs/architecture.md](docs/architecture.md) · [docs/store.md](docs/store.md) · [docs/replay.md](docs/replay.md) · [docs/deploy-metal.md](docs/deploy-metal.md) · [docs/wallets.md](docs/wallets.md) · [docs/electrum.md](docs/electrum.md) · [docs/rpc.md](docs/rpc.md) · [docs/testnet4.md](docs/testnet4.md) · [docs/hosting.md](docs/hosting.md)
 
 ## `neopd` (dev)
 

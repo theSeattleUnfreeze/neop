@@ -98,3 +98,5 @@ and does **not** touch `chainstate-*` or Electrum indexes.
    the same SHA-256d archive through the cut-off.
 
 Placeholders in examples: `STARTOS_HOST`, `USB_DATADIR`, `VPS_PUBLIC_IP` — never commit real hostnames or credentials.
+
+Reuse an existing `blocks/` archive without a second IBD: [deploy-metal.md](deploy-metal.md). Wallets: [wallets.md](wallets.md). Electrum (Fulcrum + Shulcrum only): [electrum.md](electrum.md).

@@ -20,7 +20,7 @@ Neapolitan is a **wrapper** around pinned Bitcoin validation engines, not a cons
 - Flavor-scoped RPC (`flavor=legacy|blake2b`) and broadcast isolation
 - Replay-safe UTXO catalog and default-deny send policy
 - Wallet UX glue (confidence receipts, ceremony / unique-input rules)
-- Electrum: speak the **Shulcrum** dialect on the blake2b port; classic Fulcrum/electrs assumptions on legacy
+- Electrum: **Fulcrum** on the Core port; **Shulcrum** dialect on the Knots port (neop orchestrates; does not own the ports)
 
 Ops bootstrap for the shared `blk`/`rev` archive (symlinks, cut-off, never
 clobber real files) is a **one-shot script**, not `neopd`: see
@@ -32,9 +32,11 @@ clobber real files) is a **one-shot script**, not `neopd`: see
 
 Knots marked light clients out of scope. Upstream Fulcrum rejected Blake2b headers ([cculianu/Fulcrum#327](https://github.com/cculianu/Fulcrum/issues/327)).
 
-**Reference:** vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) — variable header length + `blockchain.pow_algorithms` / protocol 1.7. Design notes: [Kilombino/blake2b-light-clients](https://github.com/Kilombino/blake2b-light-clients).
+**Core:** [Fulcrum](https://github.com/cculianu/Fulcrum) only — do not recommend electrs. **Knots:** vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) — variable header length + `blockchain.pow_algorithms` / protocol 1.7. Design notes: [Kilombino/blake2b-light-clients](https://github.com/Kilombino/blake2b-light-clients).
 
-Do **not** fork Blake2b hashing into neop. Testnet4 Electrum ports: `15001` (legacy), `15011` (blake2b).
+Wallets: Sparrow → Fulcrum; Shrike → Shulcrum ([wallets.md](wallets.md)). Ops: [electrum.md](electrum.md). Metal import: [deploy-metal.md](deploy-metal.md).
+
+Do **not** fork Blake2b hashing into neop. Testnet4 Electrum ports: `15001` (Core/Fulcrum), `15011` (Knots/Shulcrum).
 
 ## Replay ethos (product core)
 
