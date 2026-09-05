@@ -30,7 +30,11 @@ def _build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--rpc-url", default=None, help="Core/legacy bitcoind RPC URL")
     pp.add_argument("--rpc-user", default=None)
     pp.add_argument("--rpc-password", default=None)
-    pp.add_argument("--knots-rpc-url", default=None, help="Optional Knots reject-oracle RPC")
+    pp.add_argument(
+        "--knots-rpc-url",
+        default=None,
+        help="Optional Knots RPC (unused until signed; use check-signed-hex after signing)",
+    )
     pp.add_argument("--txid", required=True)
     pp.add_argument("--vout", type=int, required=True)
     pp.add_argument("--to", required=True, dest="payee", help="Payee address")

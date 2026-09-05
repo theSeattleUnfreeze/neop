@@ -94,14 +94,18 @@ def protect_psbt(
         raise RuntimeError("createpsbt did not return a PSBT string")
 
     notes.append(
-        f"OP_RETURN scriptPubKey length={spk_len} (wedge requires >={MIN_WEDGE_SCRIPT_PUBKEY_LEN})"
+        f"OP_RETURN scriptPubKey length={spk_len} (wedge requires >83 bytes, i.e. >={MIN_WEDGE_SCRIPT_PUBKEY_LEN})"
     )
     notes.append("Open PSBT in Sparrow (Fulcrum / Core path), sign, then broadcast Core-only.")
     notes.append("Do not broadcast via Knots / Shrike for this Core-bound ceremony tx.")
+    notes.append(
+        "neopd sendrawtransaction does not detect OP_RETURN wedges yet — "
+        "ceremony broadcast is out-of-band (Core engine / Sparrow) until evaluate_send gains wedge parsing."
+    )
     if knots_rpc is not None and not skip_mempool_check:
         notes.append(
-            "Knots reject oracle: after signing, run check_signed_hex(...) "
-            "or bitcoin-cli testmempoolaccept on both engines."
+            "Knots RPC is unused until the PSBT is signed; after signing run "
+            "check-signed-hex (or testmempoolaccept on both engines)."
         )
 
     return ProtectPsbtResult(

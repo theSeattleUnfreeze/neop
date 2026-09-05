@@ -64,6 +64,8 @@ class TestProtectPsbt(unittest.TestCase):
         self.assertGreaterEqual(script_pubkey_len(data), MIN_WEDGE_SCRIPT_PUBKEY_LEN)
         # payment 0.01662793
         self.assertEqual(outputs[0]["bc1qvpyz37mpg5dm4gj4zhahe59cl8syl473vdsqt3"], "0.01662793")
+        self.assertTrue(any("neopd sendrawtransaction" in n for n in result.notes))
+        self.assertTrue(any(">83" in n for n in result.notes))
 
     def test_derived_fee_when_only_utxo_sats(self):
         core = MockRpc()
