@@ -121,3 +121,21 @@ See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [d
 - Minimize scope per PR; do not mix anonymity tooling changes with feature work unless necessary.
 - Mining/DATUM = community test stack (paulscode et al.), not neop scope.
 - Related but separate: `bip110-dashboard` monitoring UI — do not mix feature work unless asked.
+
+## Real Steel review focus
+
+Apply on every Real Steel pass for this repo. Prefer fund / privacy / replay safety over feature velocity. Run gates in [`PRE_COMMIT_GATE.md`](PRE_COMMIT_GATE.md) before any push from a pass.
+
+- **Anonymity** — author/committer, remotes, `gh` user, PR fingerprint, and commit messages must not leak a personal identity; `.identity` hooks must remain enforceable (no `--no-verify`)
+- **Wrapper-first** — PRs must not reimplement Blake2b PoW, v2 header hashing, consensus policy, or mining/DATUM; engines stay pinned upstream
+- **Replay safety** — catalog / send paths default-deny dual-effect (`both`) UTXOs; no silent dual-broadcast; confidence receipts stay honest (`other_flavor_affected`)
+- **Chain naming** — user-facing and docs say **Core** / **Knots** (RPC may still say `legacy` / `blake2b`); reject “Corecoin”-style coin names
+- **Shared pre-split archive** — `scripts/archive-blocks.sh` keeps FlyTheElephant1 safety rules (idempotent symlinks, never clobber a real file, permission checks, conservative cut-off); Blake2b tip files stay out of the shared archive
+- **Secrets & placeholders** — no `.env` / RPC creds in the tree; docs use `STARTOS_HOST` / `VPS_PUBLIC_IP`-style placeholders
+- **Electrum split** — Fulcrum for Core, Shulcrum for Knots; do not fork Blake2b hashing into `neopd`
+- **Scoop threat model** — bind defaults stay loopback; no private keys; xpubs/descriptors treated as sensitive
+- **Testnet4 before mainnet** — consensus / wallet behavior validated on testnet4 (or regtest Blake2b) before mainnet claims
+- **Scope hygiene** — one concern per PR; anonymity tooling not mixed into feature PRs unless required
+
+See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/hosting.md](docs/hosting.md).
+
