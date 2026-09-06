@@ -5,9 +5,9 @@ import {
   scriptTipState,
 } from "@/lib/db/schema";
 import {
-  isNewReplayReceive,
   isReplayReceive,
   replayDedupeKey,
+  shouldCreateReplayAlert,
   type PriorTipOutpoint,
 } from "@/lib/catalog/replayReceive";
 import type { UnspentItem } from "@/lib/sync/fetchTip";
@@ -56,7 +56,7 @@ export async function applyReplayReceiveSync(
   const newNotifications: ReplaySyncResult["newNotifications"] = [];
 
   for (const hit of hits) {
-    if (!isNewReplayReceive(hit, prior)) continue;
+    if (!shouldCreateReplayAlert(hit, prior)) continue;
     const dedupeKey = replayDedupeKey(scripthash, hit.txid, hit.vout);
     const label = address?.trim() || scripthash.slice(0, 12) + "…";
     const title = `Replay received — ${label}`;

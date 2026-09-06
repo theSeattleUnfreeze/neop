@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { serializeBigints } from "@/lib/catalog/balances";
+import { serializeBigints, parseSatsInput } from "@/lib/catalog/balances";
 
 export const runtime = "nodejs";
 
@@ -71,16 +71,18 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.watchAccountId !== undefined) patch.watchAccountId = body.watchAccountId;
   if (body.sortOrder !== undefined) patch.sortOrder = body.sortOrder;
   if (body.manualCoreSats !== undefined) {
-    patch.manualCoreSats =
-      body.manualCoreSats === null || body.manualCoreSats === ""
-        ? null
-        : BigInt(body.manualCoreSats);
+    try {
+      patch.manualCoreSats = parseSatsInput(body.manualCoreSats);
+    } catch {
+      return NextResponse.json({ error: "invalid manualCoreSats" }, { status: 400 });
+    }
   }
   if (body.manualKnotsSats !== undefined) {
-    patch.manualKnotsSats =
-      body.manualKnotsSats === null || body.manualKnotsSats === ""
-        ? null
-        : BigInt(body.manualKnotsSats);
+    try {
+      patch.manualKnotsSats = parseSatsInput(body.manualKnotsSats);
+    } catch {
+      return NextResponse.json({ error: "invalid manualKnotsSats" }, { status: 400 });
+    }
   }
 
   const [account] = await db

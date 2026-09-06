@@ -5,6 +5,7 @@ import {
   isReplayReceive,
   outpointKey,
   replayDedupeKey,
+  shouldCreateReplayAlert,
 } from "./replayReceive.ts";
 
 const u = (txid: string, vout: number, value: number) => ({
@@ -52,6 +53,28 @@ describe("replayReceive", () => {
     assert.equal(
       replayDedupeKey("FF".repeat(32), "Aa".repeat(32), 0),
       `replay:${"ff".repeat(32)}:${"aa".repeat(32)}:0`
+    );
+  });
+
+  it("skips alerts on bootstrap sync (empty prior)", () => {
+    const hit = {
+      txid: "cc".repeat(32),
+      vout: 0,
+      valueSats: 1n,
+    };
+    assert.equal(shouldCreateReplayAlert(hit, []), false);
+    assert.equal(
+      shouldCreateReplayAlert(hit, [
+        { tip: "core", txid: hit.txid, vout: 0, status: "unspent" },
+        { tip: "knots", txid: hit.txid, vout: 0, status: "unspent" },
+      ]),
+      false
+    );
+    assert.equal(
+      shouldCreateReplayAlert(hit, [
+        { tip: "core", txid: hit.txid, vout: 0, status: "unspent" },
+      ]),
+      true
     );
   });
 });
