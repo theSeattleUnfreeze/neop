@@ -12,8 +12,8 @@ function tipViewFromSnapshot(snap: ScriptTipSnapshot | undefined): TipView {
       status: "unspent",
       txid: u.tx_hash,
       vout: u.tx_pos,
-      // Total of all unspent outputs on this tip for the script
-      valueSats: sumUnspent(snap.unspent),
+      // Total of all unspent outputs; number for JSON-safe API responses
+      valueSats: Number(sumUnspent(snap.unspent)),
     };
   }
   if (snap.history.length > 0) {

@@ -25,8 +25,8 @@ describe("balances", () => {
       ...annotate({
         scriptId: 1,
         address: "bc1q",
-        core: { status: "unspent", valueSats: 1000n, txid: "aa", vout: 0 },
-        knots: { status: "unspent", valueSats: 1000n, txid: "aa", vout: 0 },
+        core: { status: "unspent", valueSats: 1000, txid: "aa", vout: 0 },
+        knots: { status: "unspent", valueSats: 1000, txid: "aa", vout: 0 },
       }),
       accountId: 9,
       watchAccountId: 9,

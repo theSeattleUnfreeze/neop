@@ -46,8 +46,8 @@ export function CoinTable({ rows }: { rows: Row[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.scriptId}>
+          {rows.map((r, i) => (
+            <tr key={`${r.scriptId}-${r.address ?? "row"}-${i}`}>
               <td>
                 <span className={`presence-chip ${chipClass(r.presence)}`}>{r.presence}</span>
               </td>
