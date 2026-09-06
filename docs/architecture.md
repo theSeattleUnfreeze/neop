@@ -20,26 +20,35 @@ Neapolitan is a **wrapper** around pinned Bitcoin validation engines, not a cons
 - Flavor-scoped RPC (`flavor=legacy|blake2b`) and broadcast isolation
 - Replay-safe UTXO catalog and default-deny send policy
 - Wallet UX glue (confidence receipts, ceremony / unique-input rules)
-- Electrum: speak the **Shulcrum** dialect on the blake2b port; classic Fulcrum/electrs assumptions on legacy
+- Electrum: **Fulcrum** on the Core port; **Shulcrum** dialect on the Knots port (neop orchestrates; does not own the ports)
+
+Ops bootstrap for the shared `blk`/`rev` archive (symlinks, cut-off, never
+clobber real files) is a **one-shot script**, not `neopd`: see
+[`scripts/archive-blocks.sh`](../scripts/archive-blocks.sh) and
+[hosting.md](hosting.md). Adapted from
+[FlyTheElephant1/archive-blocks.sh](https://github.com/FlyTheElephant1/archive-blocks.sh).
 
 ## Electrum
 
 Knots marked light clients out of scope. Upstream Fulcrum rejected Blake2b headers ([cculianu/Fulcrum#327](https://github.com/cculianu/Fulcrum/issues/327)).
 
-**Reference:** vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) — variable header length + `blockchain.pow_algorithms` / protocol 1.7. Design notes: [Kilombino/blake2b-light-clients](https://github.com/Kilombino/blake2b-light-clients).
+**Core:** [Fulcrum](https://github.com/cculianu/Fulcrum) only — do not recommend electrs. **Knots:** vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) — variable header length + `blockchain.pow_algorithms` / protocol 1.7. Design notes: [Kilombino/blake2b-light-clients](https://github.com/Kilombino/blake2b-light-clients).
 
-Do **not** fork Blake2b hashing into neop. Testnet4 Electrum ports: `15001` (legacy), `15011` (blake2b).
+Wallets: Sparrow → Fulcrum; Shrike → Shulcrum ([wallets.md](wallets.md)). Ops: [electrum.md](electrum.md). Metal import: [deploy-metal.md](deploy-metal.md).
+
+Do **not** fork Blake2b hashing into neop. Testnet4 Electrum ports: `15001` (Core/Fulcrum), `15011` (Knots/Shulcrum).
 
 ## Replay ethos (product core)
 
-Same network magic means wire isolation alone is not enough. Protection is layered and **default-deny**:
+Same network magic means wire isolation alone is not enough. Protection is layered and **default-deny**. Normative detail: **[replay.md](replay.md)**.
 
-1. Catalog labels: `legacy_only` | `blake2b_only` | `both` (replay-exposed)
-2. Refuse spends still valid on the non-selected tip unless `allow_dual_effect: true`
-3. Unique-input / split ceremony for `both` coins
-4. Broadcast only to the selected flavor’s mempool
-5. Confidence receipt: `{ flavor, txid, other_flavor_affected: false }`
-6. Adopt Knots #357 sighash when enforced so txs are invalid on the other tip
+1. Catalog labels: `core_only` | `knots_only` | `both` (replay-exposed; RPC may still say `legacy_only` / `blake2b_only`)
+2. Refuse spends still valid on the non-selected tip unless unique-input, an embedded **wedge**, or `allow_dual_effect: true`
+3. **Core-bound wedge:** `OP_RETURN` scriptPubKey **> 83 bytes** (invalid on Knots reduced-data / RDTS policy)
+4. **Knots-bound wedge:** opt-in Knots sighash ([#357](https://github.com/bitcoinknots/bitcoin/pull/357)) when enforced
+5. One-time `protectwallet` ceremony to partition `both` UTXOs; unique-input thereafter
+6. Broadcast only to the selected chain’s mempool
+7. Confidence receipt: `{ chain, txid, other_chain_affected: false }` (RPC may still say `flavor` / `other_flavor_affected`)
 
 Never silent dual-broadcast. Never claim PoW alone stops replays.
 

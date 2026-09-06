@@ -17,7 +17,7 @@ Intended services (images pinned when engines land):
 | `bitcoind-legacy` | Bitcoin Core `-testnet4` (legacy engine) |
 | `bitcoind-blake2b` | Knots pinned to Blake2b hardfork work (`-testnet4`) |
 | `neopd` | Mux + replay-safe RPC (localhost) |
-| Electrum (later) | Legacy `:15001`, Blake2b/Shulcrum `:15011` |
+| Electrum (profile `electrum`) | Core **Fulcrum** `:15001`, Knots **Shulcrum** `:15011` (images still placeholders — track pin/wiring in issues) |
 
 Datadirs under `./data/testnet4/{blocks,chainstate-legacy,chainstate-blake2b,electrum}` — never reuse a mainnet volume.
 
@@ -36,10 +36,10 @@ Regtest does not replace testnet4 for wallet UX; testnet4 does not replace regte
 - [ ] `neopd getflavors` / dual `getblockchaininfo` healthy.
 - [ ] Shared store has one copy of shared SHA-256 history; disk size is not ~2× a single node.
 - [ ] Electrum ports return history for a faucet-funded address on both flavors.
-- [ ] Coin catalog labels `legacy_only` / `blake2b_only` / `both` correctly after a controlled split.
-- [ ] Replay-exposed spend is refused without explicit dual-effect authorization.
-- [ ] **Isolation proof:** after a flavor-scoped send, the other tip’s balance/UTXO set is unchanged and the other mempool does not contain the txid.
-- [ ] Confidence receipt returned (`other_flavor_affected: false`).
+- [ ] Coin catalog labels `legacy_only`/`core_only`, `blake2b_only`/`knots_only`, and `both` correctly after a controlled split ([replay.md](replay.md)).
+- [ ] Replay-exposed spend is refused without unique-input, wedge, or explicit dual-effect authorization ([replay.md](replay.md)).
+- [ ] **Isolation proof:** after a flavor-scoped send, the other tip’s balance/UTXO set is unchanged and the other mempool does not contain the txid ([replay.md](replay.md)).
+- [ ] Confidence receipt returned (`other_flavor_affected: false`; see [replay.md](replay.md)).
 - [ ] Pasting the same raw tx into the other flavor’s RPC fails accept/mempool.
 - [ ] Clients can send tBTC on the chosen flavor; explorer links resolve on mempool.guide/testnet4.
 - [ ] No mainnet RPC URLs or datadirs in the testnet4 compose profile.
