@@ -50,7 +50,7 @@ Required:
 
 Behavior:
 
-1. If the tx would still be valid on the non-selected tip → error `replay_risk_unresolved` unless **live today:** unique-input or `allow_dual_effect: true` (logged / UI-gated; never the default). **Planned:** also accept an embedded chain wedge once `evaluate_send` parses it (Core: OP_RETURN scriptPubKey > 83 bytes; Knots: #357 sighash when live). See [replay.md](replay.md) Implementation status.
+1. If the tx would still be valid on the non-selected tip → error `replay_risk_unresolved` unless unique-input, `allow_dual_effect: true`, or (Core / `legacy` only) an embedded OP_RETURN scriptPubKey **> 83 bytes** in `hex`. Knots #357 sighash wedge: **planned**. See [replay.md](replay.md) Implementation status.
 2. Broadcast **only** to the selected flavor’s P2P/mempool.
 3. On success, return a **confidence receipt**:
 
@@ -104,7 +104,7 @@ Client pairing: Sparrow → Fulcrum; Shrike → Shulcrum. See [wallets.md](walle
 | `getblockchaininfo` | Requires `flavor`; proxies pinned engine |
 | `help` | Method list |
 | `listcoins` | Catalog with flavor_presence / replay_risk |
-| `sendrawtransaction` | Flavor-scoped; default-deny replay (unique-input today; wedge detection planned); confidence receipt |
+| `sendrawtransaction` | Flavor-scoped; default-deny replay; unique-input / `allow_dual_effect` / Core OP_RETURN wedge (>83) when `flavor=legacy`; Knots #357 planned; confidence receipt |
 
 Never silent dual-broadcast.
 

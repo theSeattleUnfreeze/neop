@@ -140,13 +140,18 @@ class NeopdService:
             coins = self.catalog.resolve_inputs(outpoints)
         except KeyError as exc:
             raise RpcError(-32020, str(exc))
-        decision = evaluate_send(flavor, coins, allow_dual_effect=allow_dual)
+        decision = evaluate_send(
+            flavor,
+            coins,
+            allow_dual_effect=allow_dual,
+            raw_tx_hex=hexstring,
+        )
         if decision is SendDecision.REPLAY_RISK_UNRESOLVED:
             raise RpcError(
                 -32021,
                 "replay_risk_unresolved: spend still valid on other tip "
-                "(live: unique inputs or allow_dual_effect; "
-                "OP_RETURN/#357 wedge detection not wired yet — see docs/replay.md)",
+                "(use unique inputs, Core OP_RETURN wedge >83 when flavor=legacy, "
+                "ceremony, or allow_dual_effect; Knots #357 wedge not wired yet)",
             )
         try:
             txid = self._engine(flavor).sendrawtransaction(hexstring)
