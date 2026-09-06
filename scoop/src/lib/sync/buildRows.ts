@@ -11,7 +11,7 @@ function tipViewFromSnapshot(snap: ScriptTipSnapshot | undefined): TipView {
       status: "unspent",
       txid: u.tx_hash,
       vout: u.tx_pos,
-      valueSats: BigInt(u.value),
+      valueSats: u.value,
     };
   }
   if (snap.history.length > 0) {

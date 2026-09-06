@@ -11,7 +11,8 @@ export type TipView = {
   status: UtxoStatus | "absent";
   txid?: string;
   vout?: number;
-  valueSats?: bigint;
+  /** Satoshis from Electrum listunspent (number for JSON-safe API responses). */
+  valueSats?: number;
   spendTxid?: string;
 };
 
@@ -37,22 +38,23 @@ export function isCoreBoundSuccess(core: TipView, knots: TipView): boolean {
 }
 
 /**
- * Spill: same prior outpoint (or script) spent on both tips.
- * Prefer matching spend of the same prev outpoint when known.
+ * Spill: the same outpoint spent on both tips (dual-effect / replay exposure).
+ * When outpoint metadata is complete and differs, this is not a spill.
  */
 export function isSpill(core: TipView, knots: TipView): boolean {
   if (core.status !== "spent" || knots.status !== "spent") return false;
-  if (
-    core.txid !== undefined &&
-    knots.txid !== undefined &&
-    core.vout !== undefined &&
-    knots.vout !== undefined &&
-    core.txid === knots.txid &&
-    core.vout === knots.vout
-  ) {
-    return true;
+  const coreOut =
+    core.txid !== undefined && core.vout !== undefined
+      ? `${core.txid}:${core.vout}`
+      : undefined;
+  const knotsOut =
+    knots.txid !== undefined && knots.vout !== undefined
+      ? `${knots.txid}:${knots.vout}`
+      : undefined;
+  if (coreOut !== undefined && knotsOut !== undefined) {
+    return coreOut === knotsOut;
   }
-  // Both tips show spent for this script lineage without shared unspent residue
+  // Dual-spent without comparable outpoints — conservative spill signal
   return true;
 }
 
