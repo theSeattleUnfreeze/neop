@@ -51,8 +51,8 @@ export function coinRowFromTips(
   };
 }
 
-export function detectSpills(
-  rows: ReturnType<typeof coinRowFromTips>[]
-): ReturnType<typeof coinRowFromTips>[] {
+export function detectSpills<T extends ReturnType<typeof annotate>>(
+  rows: T[]
+): T[] {
   return rows.filter((r) => r.spill);
 }

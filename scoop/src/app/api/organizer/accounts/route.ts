@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serializeBigints } from "@/lib/catalog/balances";
+import { serializeBigints, parseSatsInput } from "@/lib/catalog/balances";
 
 export const runtime = "nodejs";
 
@@ -76,6 +76,15 @@ export async function POST(req: Request) {
     watchAccountId = watch.id;
   }
 
+  let manualCoreSats: bigint | null = null;
+  let manualKnotsSats: bigint | null = null;
+  try {
+    manualCoreSats = parseSatsInput(body.manualCoreSats);
+    manualKnotsSats = parseSatsInput(body.manualKnotsSats);
+  } catch {
+    return NextResponse.json({ error: "invalid manual sats value" }, { status: 400 });
+  }
+
   const [account] = await db
     .insert(organizerAccounts)
     .values({
@@ -84,14 +93,8 @@ export async function POST(req: Request) {
       reminder: body.reminder ?? "",
       source,
       watchAccountId,
-      manualCoreSats:
-        body.manualCoreSats != null && body.manualCoreSats !== ""
-          ? BigInt(body.manualCoreSats)
-          : null,
-      manualKnotsSats:
-        body.manualKnotsSats != null && body.manualKnotsSats !== ""
-          ? BigInt(body.manualKnotsSats)
-          : null,
+      manualCoreSats,
+      manualKnotsSats,
       sortOrder: body.sortOrder ?? 0,
       updatedAt: new Date(),
     })

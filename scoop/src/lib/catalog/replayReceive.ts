@@ -73,6 +73,18 @@ export function isNewReplayReceive(
   return !wasBothUnspent;
 }
 
+/**
+ * Whether sync should create a replay-receive alert for this hit.
+ * Bootstrap sync (empty prior) seeds tip state only — no notification flood.
+ */
+export function shouldCreateReplayAlert(
+  hit: ReplayReceiveHit,
+  prior: PriorTipOutpoint[]
+): boolean {
+  if (prior.length === 0) return false;
+  return isNewReplayReceive(hit, prior);
+}
+
 export function replayDedupeKey(
   scripthash: string,
   txid: string,

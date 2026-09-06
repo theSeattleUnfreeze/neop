@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   aggregateAccountBalances,
   aggregateScriptBalances,
+  parseSatsInput,
   portfolioTotals,
   sumUnspent,
 } from "./balances.ts";
@@ -60,5 +61,12 @@ describe("balances", () => {
     assert.equal(totals.coreSats, 1050n);
     assert.equal(totals.accountCount, 2);
     assert.equal(totals.bothCount, 1);
+  });
+
+  it("parses manual sats input", () => {
+    assert.equal(parseSatsInput(null), null);
+    assert.equal(parseSatsInput(""), null);
+    assert.equal(parseSatsInput("1000"), 1000n);
+    assert.throws(() => parseSatsInput("not-a-number"));
   });
 });

@@ -107,6 +107,18 @@ export function portfolioTotals(accountBalances: AccountBalance[]): PortfolioTot
   };
 }
 
+/** Parse manual sats from API input; null clears the field. */
+export function parseSatsInput(
+  value: string | number | null | undefined
+): bigint | null {
+  if (value === null || value === undefined || value === "") return null;
+  try {
+    return BigInt(value);
+  } catch {
+    throw new Error("invalid sats value");
+  }
+}
+
 /** JSON-safe bigint → string for API responses. */
 export function serializeBigints<T>(value: T): unknown {
   return JSON.parse(
