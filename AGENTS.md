@@ -108,16 +108,41 @@ Pin engine versions; **do not reimplement** Blake2b PoW, v2 header crypto, conse
 |-------|------|------------------|
 | Knots node (Knots chain) / pre-RDTS Knots or Bitcoin Core node (Core chain) | Tip validation for the selected chain | Wallet UX, dual-flavor mux |
 | **`neopd`** | Shared pre-split SHA-256 archive mux, dual chainstates, flavor-scoped RPC, replay-safe catalog/send, wallet UX glue | Consensus crypto, mining/DATUM |
-| Electrum | Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) for **Knots chain**; classic Fulcrum/electrs for **Core chain** | Forking Blake2b hashing into neop |
+| Electrum | Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) for **Knots chain**; **Fulcrum only** (not electrs) for **Core chain** | Forking Blake2b hashing into neop |
 
-**Ethos:** the user picks a chain; **only that chain is affected** by a spend. Default-deny replay-exposed UTXOs present on **both** chains; ceremony / unique inputs; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
+**Ethos:** the user picks a chain; **only that chain is affected** by a spend. Default-deny replay-exposed UTXOs present on **both** chains; ceremony / unique inputs / wedges; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
 
-See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/testnet4.md](docs/testnet4.md), [docs/hosting.md](docs/hosting.md).
+**Replay (agents):** Core-bound wedge = `OP_RETURN` scriptPubKey **> 83 bytes**; Knots-bound wedge = opt-in sighash ([#357](https://github.com/bitcoinknots/bitcoin/pull/357)) when enforced; one-time `protectwallet` partitions `both` coins. Normative: [docs/replay.md](docs/replay.md).
+
+**Wallets (agents):** Core = Sparrow + Fulcrum; Knots = Shrike + Shulcrum — no stock-Sparrow profile switcher. See [docs/wallets.md](docs/wallets.md), [docs/deploy-metal.md](docs/deploy-metal.md), [docs/electrum.md](docs/electrum.md).
+
+See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/replay.md](docs/replay.md), [docs/deploy-metal.md](docs/deploy-metal.md), [docs/wallets.md](docs/wallets.md), [docs/electrum.md](docs/electrum.md), [docs/testnet4.md](docs/testnet4.md), [docs/hosting.md](docs/hosting.md).
 
 ### Conventions
 
+- **Git hygiene:** prefer a **topic branch on the primary clone**; do not open worktrees for ordinary feature work. Real Steel may use a dedicated worktree only when its overlay/skill requires it. See [`.cursor/rules/agent-git-hygiene.mdc`](.cursor/rules/agent-git-hygiene.mdc).
 - Prefer placeholders in examples: `STARTOS_HOST`, `VPS_PUBLIC_IP`, not real infrastructure names.
 - Never commit `.env`, RPC passwords, or node credentials.
 - Minimize scope per PR; do not mix anonymity tooling changes with feature work unless necessary.
 - Mining/DATUM = community test stack (paulscode et al.), not neop scope.
 - Related but separate: `bip110-dashboard` monitoring UI — do not mix feature work unless asked.
+
+## Real Steel review focus
+
+Apply on every Real Steel pass for this repo. Prefer fund / privacy / replay safety over feature velocity. Run gates in [`PRE_COMMIT_GATE.md`](PRE_COMMIT_GATE.md) before any push from a pass.
+
+**Disposition (required before merge):** every Critical / Suggestion / Nit is **Blocking** (fix in the PR), **Deferred** (open a GitHub issue and link it from the PR), or **Won't do** (one-line rationale on the PR). Never leave deferred findings as PR-only comments or untracked TODOs. See [`.cursor/rules/real-steel-disposition.mdc`](.cursor/rules/real-steel-disposition.mdc).
+
+- **Anonymity** — author/committer, remotes, `gh` user, PR fingerprint, and commit messages must not leak a personal identity; `.identity` hooks must remain enforceable (no `--no-verify`)
+- **Wrapper-first** — PRs must not reimplement Blake2b PoW, v2 header hashing, consensus policy, or mining/DATUM; engines stay pinned upstream
+- **Replay safety** — catalog / send paths default-deny dual-effect (`both`) UTXOs; no silent dual-broadcast; confidence receipts stay honest (`other_flavor_affected`)
+- **Chain naming** — user-facing and docs say **Core** / **Knots** (RPC may still say `legacy` / `blake2b`); reject “Corecoin”-style coin names
+- **Shared pre-split archive** — `scripts/archive-blocks.sh` keeps FlyTheElephant1 safety rules (idempotent symlinks, never clobber a real file, permission checks, conservative cut-off); Blake2b tip files stay out of the shared archive; bootstrap must not force a second pre-fork IBD or reindex an already-supported flavor’s chainstate
+- **Secrets & placeholders** — no `.env` / RPC creds in the tree; docs use `STARTOS_HOST` / `VPS_PUBLIC_IP`-style placeholders
+- **Electrum split** — Fulcrum for Core, Shulcrum for Knots; do not fork Blake2b hashing into `neopd`
+- **Scoop threat model** — bind defaults stay loopback; no private keys; xpubs/descriptors treated as sensitive
+- **Testnet4 before mainnet** — consensus / wallet behavior validated on testnet4 (or regtest Blake2b) before mainnet claims
+- **Scope hygiene** — one concern per PR; anonymity tooling not mixed into feature PRs unless required
+
+See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/hosting.md](docs/hosting.md).
+
