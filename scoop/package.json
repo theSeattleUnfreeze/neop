@@ -1,0 +1,30 @@
+{
+  "name": "scoop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 127.0.0.1 -p 3847",
+    "build": "next build",
+    "start": "next start -H 127.0.0.1 -p 3847",
+    "lint": "next lint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "test": "tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.39.3",
+    "lucide-react": "^0.475.0",
+    "next": "^15.2.0",
+    "postgres": "^3.4.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "drizzle-kit": "^0.30.4",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}
