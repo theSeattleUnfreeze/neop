@@ -7,7 +7,8 @@ RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; \
     else pnpm install; fi
 COPY . .
 RUN pnpm run build || npm run build
+RUN chmod +x docker-entrypoint.sh
 ENV PORT=3847
 EXPOSE 3847
-# Container must listen on all interfaces; compose binds host to 127.0.0.1.
-CMD ["npx", "next", "start", "-H", "0.0.0.0", "-p", "3847"]
+# Container listens on all interfaces; compose binds host to 127.0.0.1.
+ENTRYPOINT ["./docker-entrypoint.sh"]

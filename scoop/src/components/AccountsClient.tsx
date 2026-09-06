@@ -14,8 +14,16 @@ type Account = {
   manualKnotsSats?: string | null;
 };
 
+type CardBalance = {
+  coreSats: string;
+  knotsSats: string;
+  bothCount: number;
+  estimate: boolean;
+};
+
 export function AccountsClient() {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [balances, setBalances] = useState<Map<number, CardBalance>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [notes, setNotes] = useState("");
@@ -29,13 +37,31 @@ export function AccountsClient() {
 
   const load = useCallback(async () => {
     setError(null);
-    const res = await fetch("/api/organizer/accounts");
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error ?? "failed to load accounts");
+    const [accRes, dashRes] = await Promise.all([
+      fetch("/api/organizer/accounts"),
+      fetch("/api/organizer/dashboard"),
+    ]);
+    const accJson = await accRes.json();
+    const dashJson = await dashRes.json();
+    if (!accRes.ok) {
+      setError(accJson.error ?? "failed to load accounts");
       return;
     }
-    setAccounts(json.accounts ?? []);
+    setAccounts(accJson.accounts ?? []);
+    if (dashRes.ok) {
+      const byId = new Map<number, CardBalance>();
+      for (const c of dashJson.cards ?? []) {
+        byId.set(c.account.id, {
+          coreSats: String(c.balance.coreSats),
+          knotsSats: String(c.balance.knotsSats),
+          bothCount: c.balance.bothCount,
+          estimate: c.balance.estimate,
+        });
+      }
+      setBalances(byId);
+    } else {
+      setBalances(new Map());
+    }
   }, []);
 
   useEffect(() => {
@@ -59,6 +85,8 @@ export function AccountsClient() {
         body.scripts = [
           { scripthash: scripthash.trim(), address: address.trim() || undefined },
         ];
+      } else {
+        throw new Error("scripthash required for Electrum-linked accounts");
       }
       const res = await fetch("/api/organizer/accounts", {
         method: "POST",
@@ -146,7 +174,16 @@ export function AccountsClient() {
             </label>
           </>
         )}
-        <button type="button" className="scoop-btn" onClick={create} disabled={busy || !label.trim()}>
+        <button
+          type="button"
+          className="scoop-btn"
+          onClick={create}
+          disabled={
+            busy ||
+            !label.trim() ||
+            (source === "electrum" && !scripthash.trim())
+          }
+        >
           {busy ? "Saving…" : "Create"}
         </button>
       </section>
@@ -157,22 +194,25 @@ export function AccountsClient() {
           <p className="muted">None yet.</p>
         ) : (
           <div className="account-grid">
-            {accounts.map((a) => (
+            {accounts.map((a) => {
+              const bal = balances.get(a.id);
+              return (
               <AccountCard
                 key={a.id}
                 id={a.id}
                 label={a.label}
                 reminder={a.reminder}
                 source={a.source}
-                coreSats={String(a.manualCoreSats ?? "0")}
-                knotsSats={String(a.manualKnotsSats ?? "0")}
-                bothCount={0}
+                coreSats={bal?.coreSats ?? String(a.manualCoreSats ?? "0")}
+                knotsSats={bal?.knotsSats ?? String(a.manualKnotsSats ?? "0")}
+                bothCount={bal?.bothCount ?? 0}
                 openTaskCount={0}
                 unreadNotificationCount={0}
-                estimate={a.source === "manual"}
+                estimate={bal?.estimate ?? a.source === "manual"}
                 lastSyncedAt={a.lastSyncedAt}
               />
-            ))}
+            );
+            })}
           </div>
         )}
         <p className="muted">

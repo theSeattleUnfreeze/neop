@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serializeBigints } from "@/lib/catalog/balances";
+import { serializeBigints, parseSatsInput } from "@/lib/catalog/balances";
 
 export const runtime = "nodejs";
 
@@ -52,6 +52,12 @@ export async function POST(req: Request) {
   const db = createDb();
 
   let watchAccountId = body.watchAccountId ?? null;
+  if (source === "electrum" && !watchAccountId && !body.scripts?.length) {
+    return NextResponse.json(
+      { error: "electrum account requires at least one scripthash" },
+      { status: 400 }
+    );
+  }
   if (source === "electrum" && !watchAccountId && body.scripts?.length) {
     const scripts = body.scripts.map((s) => ({
       ...s,
@@ -76,6 +82,15 @@ export async function POST(req: Request) {
     watchAccountId = watch.id;
   }
 
+  let manualCoreSats: bigint | null = null;
+  let manualKnotsSats: bigint | null = null;
+  try {
+    manualCoreSats = parseSatsInput(body.manualCoreSats);
+    manualKnotsSats = parseSatsInput(body.manualKnotsSats);
+  } catch {
+    return NextResponse.json({ error: "invalid manual sats value" }, { status: 400 });
+  }
+
   const [account] = await db
     .insert(organizerAccounts)
     .values({
@@ -84,14 +99,8 @@ export async function POST(req: Request) {
       reminder: body.reminder ?? "",
       source,
       watchAccountId,
-      manualCoreSats:
-        body.manualCoreSats != null && body.manualCoreSats !== ""
-          ? BigInt(body.manualCoreSats)
-          : null,
-      manualKnotsSats:
-        body.manualKnotsSats != null && body.manualKnotsSats !== ""
-          ? BigInt(body.manualKnotsSats)
-          : null,
+      manualCoreSats,
+      manualKnotsSats,
       sortOrder: body.sortOrder ?? 0,
       updatedAt: new Date(),
     })

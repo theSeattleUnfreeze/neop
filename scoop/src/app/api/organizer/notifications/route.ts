@@ -27,7 +27,11 @@ export async function GET(req: Request) {
     conditions.push(isNull(organizerNotifications.dismissedAt));
   }
   if (accountId) {
-    conditions.push(eq(organizerNotifications.accountId, Number(accountId)));
+    const aid = Number(accountId);
+    if (!Number.isFinite(aid)) {
+      return NextResponse.json({ error: "invalid accountId" }, { status: 400 });
+    }
+    conditions.push(eq(organizerNotifications.accountId, aid));
   }
 
   const rows = await db

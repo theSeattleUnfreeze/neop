@@ -18,8 +18,8 @@
 
   --scoop-shadow: 4px 4px 0 #2a1c12;
   --scoop-inset: inset 2px 2px 0 rgba(0, 0, 0, 0.12);
-  --scoop-font-display: "Fraunces", "Palatino Linotype", Palatino, serif;
-  --scoop-font-mono: "DM Mono", "Courier New", monospace;
+  --scoop-font-display: var(--font-fraunces), "Palatino Linotype", Palatino, serif;
+  --scoop-font-mono: var(--font-dm-mono), "Courier New", monospace;
 }
 
 [data-theme="dark"] {

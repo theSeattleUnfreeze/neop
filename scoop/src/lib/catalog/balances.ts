@@ -57,8 +57,8 @@ export function aggregateScriptBalances(rows: AnnotatedRow[]): ScriptBalance[] {
     watchAccountId: r.watchAccountId ?? null,
     address: r.address,
     presence: r.presence,
-    coreSats: r.core.status === "unspent" ? (r.core.valueSats ?? 0n) : 0n,
-    knotsSats: r.knots.status === "unspent" ? (r.knots.valueSats ?? 0n) : 0n,
+    coreSats: r.core.status === "unspent" ? BigInt(r.core.valueSats ?? 0) : 0n,
+    knotsSats: r.knots.status === "unspent" ? BigInt(r.knots.valueSats ?? 0) : 0n,
     both: r.presence === "both",
     spill: r.spill,
     coreBoundOk: r.coreBoundOk,
@@ -105,6 +105,18 @@ export function portfolioTotals(accountBalances: AccountBalance[]): PortfolioTot
     spillCount: accountBalances.reduce((acc, a) => acc + a.spillCount, 0),
     accountCount: accountBalances.length,
   };
+}
+
+/** Parse manual sats from API input; null clears the field. */
+export function parseSatsInput(
+  value: string | number | null | undefined
+): bigint | null {
+  if (value === null || value === undefined || value === "") return null;
+  try {
+    return BigInt(value);
+  } catch {
+    throw new Error("invalid sats value");
+  }
 }
 
 /** JSON-safe bigint → string for API responses. */
