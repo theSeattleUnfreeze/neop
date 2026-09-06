@@ -53,14 +53,11 @@ export class ElectrumClient {
         cleanup();
         reject(err);
       };
-      const onConnect = () => {
-        cleanup();
-        resolve();
-      };
       const cleanup = () => {
+        clearTimeout(timer);
         socket.off("error", onError);
-        socket.off("connect", onConnect);
-        socket.off("secureConnect", onConnect);
+        socket.off("connect", onConnected);
+        socket.off("secureConnect", onConnected);
       };
       const socket = this.target.tls
         ? tls.connect({ host: this.target.host, port: this.target.port, servername: this.target.host })
@@ -69,9 +66,13 @@ export class ElectrumClient {
       socket.setEncoding("utf8");
       socket.on("data", (chunk: string) => this.onData(chunk));
       socket.on("error", onError);
-      if (this.target.tls) socket.once("secureConnect", onConnect);
-      else socket.once("connect", onConnect);
-      setTimeout(() => onError(new Error("electrum connect timeout")), timeoutMs);
+      const timer = setTimeout(() => onError(new Error("electrum connect timeout")), timeoutMs);
+      const onConnected = () => {
+        cleanup();
+        resolve();
+      };
+      if (this.target.tls) socket.once("secureConnect", onConnected);
+      else socket.once("connect", onConnected);
     });
   }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizeScripthash } from "@/lib/electrum/scripthash";
 import { coinRowFromTips } from "@/lib/sync/buildRows";
 import { envElectrumUrls, fetchScriptTip } from "@/lib/sync/fetchTip";
 
@@ -20,6 +21,17 @@ export async function POST(req: Request) {
   };
 
   let scripts = body.scripts ?? [];
+  if (scripts.length) {
+    try {
+      scripts = scripts.map((s) => ({
+        ...s,
+        scripthash: normalizeScripthash(s.scripthash),
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
   if (!scripts.length && process.env.SCOOP_DATABASE_URL) {
     const { createDb } = await import("@/lib/db/client");
     const { watchedScripts } = await import("@/lib/db/schema");

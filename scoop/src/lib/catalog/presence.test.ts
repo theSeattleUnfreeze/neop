@@ -17,7 +17,7 @@ const unspent = (txid = "aa".repeat(32)): TipView => ({
   status: "unspent",
   txid,
   vout: 0,
-  valueSats: 1000n,
+  valueSats: 1000,
 });
 const spent = (opts?: { spendTxid?: string; txid?: string; vout?: number }): TipView => ({
   status: "spent",
@@ -141,6 +141,23 @@ describe("buildRows", () => {
     );
     assert.equal(row.spill, true);
     assert.equal(detectSpills([row]).length, 1);
+  });
+
+  it("serializes unspent rows for JSON API responses", () => {
+    const row = coinRowFromTips(
+      1,
+      "bc1q",
+      {
+        tip: "core",
+        scripthash: "00".repeat(32),
+        ok: true,
+        unspent: [{ tx_hash: "aa".repeat(32), tx_pos: 0, value: 12345, height: 1 }],
+        history: [],
+      },
+      undefined
+    );
+    assert.doesNotThrow(() => JSON.stringify(row));
+    assert.equal(row.core.valueSats, 12345);
   });
 });
 
