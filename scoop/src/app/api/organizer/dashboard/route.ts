@@ -30,9 +30,12 @@ export async function GET() {
     .from(organizerAccounts)
     .orderBy(organizerAccounts.sortOrder);
 
-  // Live rows not loaded here — electrum balances come from last sync via manual
-  // estimates or a follow-up sync. Dashboard uses stored manual sats + zeros for
-  // electrum until client syncs (balances filled after sync endpoint).
+  const { loadOrganizerRowsFromTipState } = await import("@/lib/organizer/tipStateRows");
+  const watchAccountIds = accounts
+    .map((a) => a.watchAccountId)
+    .filter((id): id is number => id != null);
+  const rows = await loadOrganizerRowsFromTipState(db, watchAccountIds);
+
   const balances = aggregateAccountBalances(
     accounts.map((a) => ({
       id: a.id,
@@ -41,7 +44,7 @@ export async function GET() {
       manualCoreSats: a.manualCoreSats,
       manualKnotsSats: a.manualKnotsSats,
     })),
-    []
+    rows
   );
 
   const openTasks = await db

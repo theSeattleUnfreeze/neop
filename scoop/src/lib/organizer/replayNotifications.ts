@@ -128,6 +128,7 @@ export async function applyReplayReceiveSync(
       outpointTxid: u.tx_hash.toLowerCase(),
       outpointVout: u.tx_pos,
       status: "unspent" as const,
+      valueSats: BigInt(u.value),
     })),
     ...input.knotsUnspent.map((u) => ({
       scriptId,
@@ -135,6 +136,7 @@ export async function applyReplayReceiveSync(
       outpointTxid: u.tx_hash.toLowerCase(),
       outpointVout: u.tx_pos,
       status: "unspent" as const,
+      valueSats: BigInt(u.value),
     })),
   ];
   if (tipRows.length) {
