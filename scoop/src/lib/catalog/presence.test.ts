@@ -6,8 +6,9 @@ import {
   isCoreBoundSuccess,
   isSpill,
   presenceOf,
+  type CoinRow,
   type TipView,
-} from "../catalog/presence.ts";
+} from "./presence.ts";
 import { coinRowFromTips, detectSpills } from "../sync/buildRows.ts";
 import { electrumScripthashFromScriptPubKey, normalizeScripthash } from "../electrum/scripthash.ts";
 import { parseElectrumUrl } from "../electrum/client.ts";
@@ -18,11 +19,11 @@ const unspent = (txid = "aa".repeat(32)): TipView => ({
   vout: 0,
   valueSats: 1000n,
 });
-const spent = (spendTxid = "bb".repeat(32)): TipView => ({
+const spent = (opts?: { spendTxid?: string; txid?: string; vout?: number }): TipView => ({
   status: "spent",
-  spendTxid,
-  txid: "aa".repeat(32),
-  vout: 0,
+  spendTxid: opts?.spendTxid ?? "bb".repeat(32),
+  txid: opts?.txid ?? "aa".repeat(32),
+  vout: opts?.vout ?? 0,
 });
 const absent: TipView = { status: "absent" };
 
@@ -41,8 +42,29 @@ describe("presence", () => {
     assert.equal(isSpill(core, knots), false);
   });
 
-  it("detects spill when both tips spent", () => {
-    assert.equal(isSpill(spent("11".repeat(32)), spent("22".repeat(32))), true);
+  it("detects spill when both tips spent on the same outpoint", () => {
+    assert.equal(
+      isSpill(
+        spent({ spendTxid: "11".repeat(32), txid: "aa".repeat(32), vout: 0 }),
+        spent({ spendTxid: "22".repeat(32), txid: "aa".repeat(32), vout: 0 })
+      ),
+      true
+    );
+  });
+
+  it("returns false when both spent with different outpoints", () => {
+    assert.equal(
+      isSpill(
+        { status: "spent", txid: "aa", vout: 0 },
+        { status: "spent", txid: "bb", vout: 1 }
+      ),
+      false
+    );
+  });
+
+  it("flags incomplete outpoint metadata for manual review", () => {
+    assert.equal(isSpill({ status: "spent", txid: "aa" }, { status: "spent" }), true);
+    assert.equal(isSpill({ status: "spent" }, { status: "spent", txid: "bb", vout: 0 }), true);
   });
 
   it("filters flavor views", () => {
@@ -54,6 +76,21 @@ describe("presence", () => {
     });
     assert.equal(filterByFlavor(row, "core"), true);
     assert.equal(filterByFlavor(row, "knots"), false);
+  });
+});
+
+describe("annotate", () => {
+  it("adds presence, coreBoundOk, and spill fields", () => {
+    const row: CoinRow = {
+      scriptId: 42,
+      core: { status: "spent", txid: "x", vout: 0 },
+      knots: { status: "unspent" },
+    };
+    const out = annotate(row);
+    assert.equal(out.scriptId, 42);
+    assert.equal(out.presence, "both");
+    assert.equal(out.coreBoundOk, true);
+    assert.equal(out.spill, false);
   });
 });
 
@@ -83,7 +120,7 @@ describe("buildRows", () => {
     assert.equal(detectSpills([row]).length, 0);
   });
 
-  it("flags spills when both spent", () => {
+  it("flags spills when both spent without outpoint metadata", () => {
     const row = coinRowFromTips(
       1,
       null,

@@ -19,3 +19,15 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Ensure store smoke
         run: python -m neopd --ensure-store --datadir /tmp/neop-ci --network testnet4
+      - uses: actions/setup-node@v4
+        if: hashFiles('scoop/package.json') != ''
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: scoop/package-lock.json
+      - name: Run scoop tests
+        if: hashFiles('scoop/package.json') != ''
+        run: |
+          cd scoop
+          npm ci
+          npm test
