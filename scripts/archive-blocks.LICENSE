@@ -1,0 +1,11 @@
+GNU General Public License version 2 applies to `archive-blocks.sh` in this
+directory (and this notice).
+
+The script is adapted from FlyTheElephant1/archive-blocks.sh
+(https://github.com/FlyTheElephant1/archive-blocks.sh), Copyright (C) 2026
+FlyTheElephant1, with neop-specific changes by theSeattleUnfreeze.
+
+See the full GPL-2.0 text at:
+  https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
+
+Or the upstream LICENSE file in that repository.

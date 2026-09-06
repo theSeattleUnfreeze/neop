@@ -2,9 +2,9 @@
 
 Network enum: `testnet4` | `regtest` | `main`. Development default: **`testnet4`**.
 
-Flavor enum for live wallet paths: `legacy` | `blake2b`. Optional archive: `rdts_sha256` (read-only / not for ordinary send).
+Flavor enum for live wallet paths: `legacy` | `blake2b` (aliases for the **Core** and **Knots** chains). Optional archive: `rdts_sha256` (read-only / not for ordinary send). Prefer **Core / Knots** in UI copy; see [replay.md](replay.md) for wedges and `protectwallet`.
 
-This is the contract for clients (dashboard, Sparrow). Engines remain Core / Knots behind the mux — neopd does not invent consensus RPC.
+This is the contract for clients (dashboard, Sparrow, Shrike). Engines remain Core / Knots behind the mux — neopd does not invent consensus RPC.
 
 ## Discovery
 
@@ -34,10 +34,10 @@ Every UTXO includes:
 
 | Field | Values |
 |-------|--------|
-| `flavor_presence` | `legacy_only` \| `blake2b_only` \| `both` (optional `rdts_sha256_only`) |
+| `flavor_presence` | `legacy_only` \| `blake2b_only` \| `both` (optional `rdts_sha256_only`; prefer documenting as Core-only / Knots-only / both) |
 | `replay_risk` | `none` \| `exposed` |
 
-Clients MUST surface presence before send. `both` coins are not spendable via ordinary send until ceremony or a unique input exists.
+Clients MUST surface presence before send. `both` coins are not spendable via ordinary send until ceremony, a unique input, or an embedded wedge exists. Full policy: [replay.md](replay.md).
 
 ## Send (replay-safe)
 
@@ -45,12 +45,12 @@ Clients MUST surface presence before send. `both` coins are not spendable via or
 
 Required:
 
-- `flavor`: `legacy` | `blake2b`
+- `flavor`: `legacy` | `blake2b` (Core / Knots)
 - Transaction hex or wallet construction params
 
 Behavior:
 
-1. If the tx would still be valid on the non-selected tip → error `replay_risk_unresolved` unless `allow_dual_effect: true` (logged / UI-gated; never the default).
+1. If the tx would still be valid on the non-selected tip → error `replay_risk_unresolved` unless unique-input, `allow_dual_effect: true`, or (Core / `legacy` only) an embedded OP_RETURN scriptPubKey **> 83 bytes** in `hex`. Knots #357 sighash wedge: **planned**. See [replay.md](replay.md) Implementation status.
 2. Broadcast **only** to the selected flavor’s P2P/mempool.
 3. On success, return a **confidence receipt**:
 
@@ -62,17 +62,52 @@ Behavior:
 }
 ```
 
-`other_flavor_affected: true` only when dual-effect was explicitly authorized.
+`other_flavor_affected: true` only when dual-effect was explicitly authorized. Field names may gain `chain` / `other_chain_affected` aliases later.
 
 Never auto-broadcast the same raw tx to both flavors.
+
+## Protect (planned)
+
+### `protectwallet`
+
+One-time (or re-protect) ceremony to partition `both` UTXOs. See [replay.md](replay.md).
+
+```json
+{
+  "dry_run": true,
+  "chains": ["core", "knots"]
+}
+```
+
+Returns a plan of Core-bound (OP_RETURN > 83) and Knots-bound (#357 when available) transactions / status. Staged protect: Core pass may run before Knots #357 is live.
+
+### `getreplaystatus` (planned)
+
+Counts of `both` / protected / pending Knots pass (and related banners for new dual deposits).
 
 ## Electrum (adjacent, not JSON-RPC)
 
 | Port (testnet4) | Dialect |
 |-----------------|---------|
-| `15001` | Legacy: classic 80-byte SHA256d (Fulcrum/electrs) |
-| `15011` | Blake2b: [Shulcrum](https://github.com/Kilombino/Shulcrum) — variable headers, protocol ≥1.6 headers-as-list, `blockchain.pow_algorithms` / 1.7 |
+| `15001` | Core: **Fulcrum** (classic 80-byte SHA256d) — not electrs |
+| `15011` | Knots: [Shulcrum](https://github.com/Kilombino/Shulcrum) — variable headers, protocol ≥1.6 headers-as-list, `blockchain.pow_algorithms` / 1.7 |
+
+Client pairing: Sparrow → Fulcrum; Shrike → Shulcrum. See [wallets.md](wallets.md), [electrum.md](electrum.md).
+
+## Implemented
+
+| Method | Status |
+|--------|--------|
+| `getnetwork` | Returns `{network}` |
+| `getstoreinfo` | Datadir paths + indexed block count |
+| `getflavors` | Dual engine health |
+| `getblockchaininfo` | Requires `flavor`; proxies pinned engine |
+| `help` | Method list |
+| `listcoins` | Catalog with flavor_presence / replay_risk |
+| `sendrawtransaction` | Flavor-scoped; default-deny replay; unique-input / `allow_dual_effect` / Core OP_RETURN wedge (>83) when `flavor=legacy`; Knots #357 planned; confidence receipt |
+
+Never silent dual-broadcast.
 
 ## Status
 
-Stub: methods and error codes will gain concrete JSON schemas as `neopd` lands. Until then, treat this document as the normative intent for Phase A.
+Normative intent for Phase A+; live methods grow with `neopd` slices.

@@ -1,0 +1,29 @@
+# Pinned validation engines for neopd.
+# Pin versions here; do not vendor full Core/Knots trees into this repo.
+# Blake2b PoW / HeaderV2 consensus live in Knots — never reimplemented in neop.
+
+[legacy]
+name = "bitcoin-core"
+# Release tag to track once compose images are published.
+git_tag = "v28.0"
+# Placeholder compose image until a reproducible build is wired.
+image = "bitcoin/bitcoin:placeholder"
+notes = "Stock Bitcoin Core for flavor=legacy (SHA-256d)."
+
+[blake2b]
+name = "bitcoin-knots-blake2b"
+# Track Knots Blake2b hardfork work; pin a commit when a release branch exists.
+upstream_pr = "https://github.com/bitcoinknots/bitcoin/pull/359"
+related = [
+  "https://github.com/bitcoinknots/bitcoin/pull/358",
+  "https://github.com/bitcoinknots/bitcoin/pull/363",
+  "https://github.com/bitcoinknots/bitcoin/pull/357",
+]
+git_ref = "pull/359/head"
+image = "neop/knots-blake2b:placeholder"
+notes = """
+Validation engine for flavor=blake2b. Owns Blake2b GetHash, v2 headers (bit 31),
+RDTS co-activation (#358), HeaderV2 RPC (#363), sighash (#357) when enforced.
+neopd only routes RPC and shards — it does not copy PoW vectors into-tree until
+a pinable Knots image exists for CI.
+"""
