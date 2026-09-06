@@ -8,7 +8,7 @@ Dual-flavor Bitcoin node and coin-control wallet: live tips on the **Core** chai
 
 Published under [theSeattleUnfreeze](https://github.com/theSeattleUnfreeze). Daemon name: **`neopd`**.
 
-> Status: identity gates + Phase A docs shipped; Phase B `neopd` scaffolding in stacked PRs. Engines stay pinned upstream — neop does not reimplement Blake2b PoW.
+> Status: identity gates + Phase A docs shipped; Phase B `neopd` core (store, engines, catalog, Electrum wiring). Engines stay pinned upstream — neop does not reimplement Blake2b PoW.
 
 ## Two chains
 
@@ -36,7 +36,28 @@ RPC and config may still use `flavor=blake2b` / `flavor=legacy` as aliases for t
 | `neopd` | Shared archive mux, dual chainstates, flavor RPC, replay-safe send |
 | [Shulcrum](https://github.com/Kilombino/Shulcrum) | Vendored Electrum server for variable Blake2b headers |
 
-Details: [docs/architecture.md](docs/architecture.md) · [docs/rpc.md](docs/rpc.md) · [docs/testnet4.md](docs/testnet4.md) · [docs/hosting.md](docs/hosting.md) · [docs/scoop.md](docs/scoop.md)
+Details: [docs/architecture.md](docs/architecture.md) · [docs/store.md](docs/store.md) · [docs/replay.md](docs/replay.md) · [docs/deploy-metal.md](docs/deploy-metal.md) · [docs/wallets.md](docs/wallets.md) · [docs/electrum.md](docs/electrum.md) · [docs/rpc.md](docs/rpc.md) · [docs/testnet4.md](docs/testnet4.md) · [docs/hosting.md](docs/hosting.md) · [docs/scoop.md](docs/scoop.md)
+
+## `neopd` (dev)
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m neopd --ensure-store --datadir ./data --network testnet4
+python3 -m neopd --datadir ./data --network testnet4   # JSON-RPC on :18334
+python3 -m pytest -q
+```
+
+## CLI helpers (`neop_cli`)
+
+Stdlib helpers for Core-bound ceremony and Electrum pairing (sign in Sparrow; no broadcast):
+
+```bash
+PYTHONPATH=. python3 -m neop_cli electrum-endpoints --network testnet4
+PYTHONPATH=. python3 -m neop_cli protect-psbt --help
+PYTHONPATH=. python3 -m unittest discover -s tests -v
+```
+
+See [neop_cli/README.md](neop_cli/README.md) and [docs/replay.md](docs/replay.md).
 
 ## Scoop (optional read-only UI)
 
@@ -65,6 +86,29 @@ Knots marked light-client / Electrum work **out of scope**. neop **vendors and r
 | Testnet4 port (planned) | `15001` | `15011` |
 
 Same rule as blocks: **one shared pre-split Electrum index**, flavor-specific deltas after the split — not two full indexes over two full nodes.
+
+## Shared pre-split block archive
+
+Before Blake2b activation, Core and Knots can share one copy of SHA-256d
+`blk*.dat` / `rev*.dat` history. The runtime mux stays in **`neopd`**; the
+filesystem ceremony is [`scripts/archive-blocks.sh`](scripts/archive-blocks.sh)
+(GPL-2.0).
+
+That helper adapts design and safety rules from
+**[FlyTheElephant1/archive-blocks.sh](https://github.com/FlyTheElephant1/archive-blocks.sh)**
+— thanks to FlyTheElephant1 — including idempotent symlinks, never replacing a
+real file with a symlink, permission checks, and a conservative mtime cut-off
+recipe. See [docs/hosting.md](docs/hosting.md).
+
+```bash
+./scripts/archive-blocks.sh -i /path/to/blocks --suggest-cutoff
+./scripts/archive-blocks.sh -i /path/to/blocks -o /path/to/shared/blocks -n 05687
+# Second flavor (no second pre-fork download):
+./scripts/archive-blocks.sh -i /path/to/blocks -o /path/to/shared/blocks \
+  -a /path/to/blocks-knots -n 05687
+```
+
+Operator walkthroughs (new dual-flavor vs existing one-flavor): [docs/hosting.md](docs/hosting.md).
 
 ## Privacy gates (maintainers)
 
@@ -103,6 +147,13 @@ docker compose -f docker-compose.testnet4.yml config
 
 Explorer: [mempool.guide/testnet4](https://mempool.guide/testnet4).
 
+## Credits
+
+- Shared `blk`/`rev` archive ceremony adapted from
+  [FlyTheElephant1/archive-blocks.sh](https://github.com/FlyTheElephant1/archive-blocks.sh)
+  (GPL-2.0). See [`scripts/archive-blocks.LICENSE`](scripts/archive-blocks.LICENSE).
+
 ## License
 
-TBD (will be set when the first feature code lands).
+Repository license TBD. `scripts/archive-blocks.sh` is **GPL-2.0** (derived work;
+see that file and `scripts/archive-blocks.LICENSE`).
