@@ -120,6 +120,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [d
 
 ### Conventions
 
+- **Git hygiene:** prefer a **topic branch on the primary clone**; do not open worktrees for ordinary feature work. Real Steel may use a dedicated worktree only when its overlay/skill requires it. See [`.cursor/rules/agent-git-hygiene.mdc`](.cursor/rules/agent-git-hygiene.mdc).
 - Prefer placeholders in examples: `STARTOS_HOST`, `VPS_PUBLIC_IP`, not real infrastructure names.
 - Never commit `.env`, RPC passwords, or node credentials.
 - Minimize scope per PR; do not mix anonymity tooling changes with feature work unless necessary.

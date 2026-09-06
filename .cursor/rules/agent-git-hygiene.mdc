@@ -1,0 +1,32 @@
+---
+description: Prefer primary-clone topic branches; worktrees only when needed or Real Steel overlay says so
+alwaysApply: true
+---
+
+# Agent git hygiene (neop)
+
+**Default:** topic branch on the **primary clone** (`/Users/andrew/workspace/neop` or this checkout’s main tree). Do **not** create `neop-wt/*` worktrees for ordinary feature / PR work.
+
+Same posture as Alliance HQ: isolate with **branches** first. See also the user rule **Agent git hygiene (branches first)** / `~/.cursor/rules/agent-git-hygiene.mdc`.
+
+## Prefer primary + branches
+
+| Do | Don't |
+| --- | --- |
+| `git checkout -b feat/<topic>` on primary | Default to `git worktree add ../neop-wt/...` |
+| One agent → one branch → one PR concern | Two agents on the same branch |
+| Stop/ask if primary is dirty or another agent owns it | Silent worktree to dodge WIP |
+
+**Worktree only when:** maintainer asks; primary is actively used by another writer; concurrent implementing agents need two trees; or **Real Steel** overlay/skill requires a dedicated worktree.
+
+## Real Steel exception
+
+`/real-steel` on neop may use a dedicated worktree when the Real Steel skill/overlay says so (then `move_agent_to_root` once into that tree). Otherwise prefer the PR branch on primary. Parent must not edit primary while a Real Steel worktree is the active writer.
+
+## Anon + identity
+
+Before commit/push/`gh` writes: local `.identity` with `required_profile=anon`, then `github-identity anon` / `check`. See AGENTS.md and user identity rules. Never commit `.identity`.
+
+## Cleanup
+
+Remove task worktrees when done; delete merged local topic branches; keep primary on `main` when idle.
