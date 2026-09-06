@@ -169,3 +169,108 @@ a {
 .muted {
   color: var(--scoop-muted);
 }
+
+.scoop-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
+  font-size: 0.8rem;
+}
+
+.field input {
+  font: inherit;
+  padding: 0.45rem 0.55rem;
+  border: 2px solid var(--scoop-border);
+  background: var(--scoop-bg);
+  color: var(--scoop-fg);
+}
+
+.scoop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.5rem 0.8rem;
+  border: 2px solid var(--scoop-border);
+  background: var(--scoop-core);
+  color: var(--scoop-core-fg);
+  box-shadow: var(--scoop-shadow);
+}
+
+.scoop-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.banner {
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.65rem;
+  border: 2px solid var(--scoop-border);
+  font-size: 0.85rem;
+}
+
+.banner.warn {
+  background: var(--scoop-both);
+  color: var(--scoop-both-fg);
+}
+
+.banner.bad {
+  background: var(--scoop-knots);
+  color: var(--scoop-knots-fg);
+}
+
+.coin-table-wrap {
+  overflow-x: auto;
+}
+
+.coin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.coin-table th,
+.coin-table td {
+  border: 1px solid var(--scoop-border);
+  padding: 0.45rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.coin-table th {
+  background: var(--scoop-bg);
+}
+
+.mono {
+  font-family: var(--scoop-font-mono);
+  word-break: break-all;
+}
+
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.flag {
+  border: 2px solid var(--scoop-border);
+  padding: 0.1rem 0.35rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.flag.ok {
+  background: var(--scoop-core);
+  color: var(--scoop-core-fg);
+}
+
+.flag.spill {
+  background: var(--scoop-knots);
+  color: var(--scoop-knots-fg);
+}

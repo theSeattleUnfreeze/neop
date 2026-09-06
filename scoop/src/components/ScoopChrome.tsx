@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Cherry, IceCreamCone, Milk } from "lucide-react";
+import { AlertTriangle, Candy, Cherry, IceCreamCone } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 
 const NAV = [
   { href: "/", label: "Neapolitan", Icon: IceCreamCone },
   { href: "/flavor/core", label: "Core", Icon: Cherry },
-  { href: "/flavor/knots", label: "Knots", Icon: Milk },
-  { href: "/spills", label: "Spills", Icon: Cherry },
+  { href: "/flavor/knots", label: "Knots", Icon: Candy },
+  { href: "/spills", label: "Spills", Icon: AlertTriangle },
 ];
 
 export function ScoopChrome({ children }: { children: React.ReactNode }) {
