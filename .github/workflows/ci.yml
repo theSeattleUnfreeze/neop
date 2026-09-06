@@ -23,11 +23,13 @@ jobs:
         if: hashFiles('scoop/package.json') != ''
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: scoop/package-lock.json
+          cache: pnpm
+          cache-dependency-path: scoop/pnpm-lock.yaml
       - name: Run scoop tests
         if: hashFiles('scoop/package.json') != ''
         run: |
+          corepack enable
+          corepack prepare pnpm@9.15.4 --activate
           cd scoop
-          npm ci
-          npm test
+          pnpm install --frozen-lockfile
+          pnpm test

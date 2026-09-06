@@ -24,7 +24,11 @@ export async function GET(req: Request) {
     conditions.push(eq(organizerTasks.status, status as "open" | "done" | "dismissed"));
   }
   if (accountId) {
-    conditions.push(eq(organizerTasks.accountId, Number(accountId)));
+    const aid = Number(accountId);
+    if (!Number.isFinite(aid)) {
+      return NextResponse.json({ error: "invalid accountId" }, { status: 400 });
+    }
+    conditions.push(eq(organizerTasks.accountId, aid));
   }
 
   const tasks = await db
