@@ -129,7 +129,7 @@ export function DashboardClient() {
           <div>
             <h2>Dashboard</h2>
             <p className="muted">
-              Top-level Core / Knots balances across self-hosted wallet accounts. Sync talks only to
+              Top-level Core / Knots balances across self-hosted wallets. Sync talks only to
               your Fulcrum and Shulcrum.
             </p>
           </div>
@@ -217,15 +217,15 @@ export function DashboardClient() {
 
       <section className="scoop-panel">
         <div className="section-head">
-          <h3>Accounts</h3>
-          <Link href="/accounts" className="scoop-btn ghost">
+          <h3>Wallets</h3>
+          <Link href="/wallets" className="scoop-btn ghost">
             Manage
           </Link>
         </div>
         {!dash?.cards.length ? (
           <p className="muted">
-            No accounts yet.{" "}
-            <Link href="/accounts">Add a wallet location</Link> (manual note or Electrum watch).
+            No wallets yet.{" "}
+            <Link href="/wallets">Add a wallet</Link> (manual note or Electrum-linked xpub).
           </p>
         ) : (
           <div className="account-grid">

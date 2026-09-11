@@ -107,7 +107,7 @@ export function TasksClient() {
       <section className="scoop-panel">
         <h3>{filter === "all" ? "All tasks" : `${filter} tasks`}</h3>
         {!tasks.length ? (
-          <p className="muted">None. Sync an Electrum-linked account to auto-suggest split work.</p>
+          <p className="muted">None. Sync an Electrum-linked wallet to auto-suggest split work.</p>
         ) : (
           <ul className="task-list">
             {tasks.map((t) => (
@@ -119,8 +119,8 @@ export function TasksClient() {
                 {t.body ? <p className="muted">{t.body}</p> : null}
                 <div className="dash-actions">
                   {t.accountId ? (
-                    <Link href={`/accounts/${t.accountId}`} className="muted">
-                      Account #{t.accountId}
+                    <Link href={`/wallets/${t.accountId}`} className="muted">
+                      Wallet #{t.accountId}
                     </Link>
                   ) : null}
                   {t.status === "open" ? (

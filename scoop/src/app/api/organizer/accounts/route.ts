@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 function requireDb() {
   if (!process.env.SCOOP_DATABASE_URL) {
     return NextResponse.json(
-      { error: "SCOOP_DATABASE_URL required for organizer accounts" },
+      { error: "SCOOP_DATABASE_URL required for organizer wallets" },
       { status: 503 }
     );
   }
@@ -32,9 +32,20 @@ type CreateBody = {
   manualCoreSats?: string | number | null;
   manualKnotsSats?: string | number | null;
   sortOrder?: number;
-  /** When creating electrum-linked: also register watch scripts */
-  scripts?: { scripthash: string; address?: string; path?: string }[];
+  /** When creating electrum-linked: also register watch addresses */
+  scripts?: { scripthash?: string; address?: string; path?: string; scriptPubKeyHex?: string }[];
   watchKey?: string;
+  /** Wallet-level xpub/ypub/zpub from Sparrow — expands to addresses */
+  xpub?: string;
+  /** Override derivation path (e.g. m/84'/0'/0') to force address type */
+  derivationPath?: string;
+  /** Receive addresses to watch (default 50) */
+  gapLimit?: number;
+  includeChange?: boolean;
+  /** Probe common script types on Electrum (default: true for bare xpub) */
+  discover?: boolean;
+  /** Validate + probe without inserting */
+  preview?: boolean;
 };
 
 export async function POST(req: Request) {
@@ -48,21 +59,132 @@ export async function POST(req: Request) {
   const { organizerAccounts, watchedAccounts, watchedScripts } = await import(
     "@/lib/db/schema"
   );
-  const { normalizeScripthash } = await import("@/lib/electrum/scripthash");
+  const { resolveWatch } = await import("@/lib/electrum/address");
+  const { clampGapLimit, DEFAULT_GAP_LIMIT } = await import("@/lib/electrum/gap");
   const db = createDb();
+  const gapLimit = clampGapLimit(body.gapLimit ?? DEFAULT_GAP_LIMIT);
 
   let watchAccountId = body.watchAccountId ?? null;
-  if (source === "electrum" && !watchAccountId && !body.scripts?.length) {
+  let discoveryMeta: unknown = null;
+
+  if (source === "electrum" && !watchAccountId && body.xpub?.trim()) {
+    const { expandAccountXpub } = await import("@/lib/electrum/xpub");
+    const { discoverXpubScriptKind } = await import("@/lib/electrum/discoverXpub");
+    const { envElectrumUrls } = await import("@/lib/sync/fetchTip");
+    const urls = envElectrumUrls();
+    const xpub = body.xpub.trim();
+    const wantDiscover =
+      body.discover === true ||
+      (body.discover !== false &&
+        !body.derivationPath &&
+        (xpub.startsWith("xpub") || xpub.startsWith("tpub")));
+
+    let scriptKind: import("@/lib/electrum/xpub").ScriptKind | undefined;
+    let accountPath = body.derivationPath?.trim() || undefined;
+    if (wantDiscover) {
+      try {
+        const found = await discoverXpubScriptKind({
+          extendedKey: xpub,
+          fulcrumUrl: urls.fulcrum,
+          shulcrumUrl: urls.shulcrum,
+          probe: Math.min(gapLimit, 10),
+        });
+        scriptKind = found.scriptKind;
+        accountPath = accountPath || found.accountPath;
+        discoveryMeta = {
+          discovered: found.discovered,
+          scriptKind: found.scriptKind,
+          accountPath: found.accountPath,
+          hits: found.hits,
+        };
+      } catch (e) {
+        return NextResponse.json(
+          { error: e instanceof Error ? e.message : "invalid xpub" },
+          { status: 400 }
+        );
+      }
+    }
+
+    let expanded;
+    try {
+      expanded = expandAccountXpub({
+        extendedKey: xpub,
+        accountPath,
+        scriptKind,
+        gapLimit,
+        includeChange: body.includeChange === true,
+      });
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "invalid xpub" },
+        { status: 400 }
+      );
+    }
+
+    if (body.preview) {
+      const { probeWatchUsage } = await import("@/lib/electrum/discoverXpub");
+      const usage = await probeWatchUsage(expanded.scripts, [urls.fulcrum, urls.shulcrum].filter(Boolean) as string[]);
+      return NextResponse.json({
+        preview: true,
+        gapLimit,
+        scriptKind: expanded.scriptKind,
+        accountPath: expanded.accountPath,
+        addressCount: expanded.scripts.length,
+        sampleAddress: expanded.scripts[0]?.address ?? null,
+        used: usage.used,
+        reachable: usage.reachable,
+        emptyWatch: usage.reachable && !usage.used,
+      });
+    }
+
+    const [watch] = await db
+      .insert(watchedAccounts)
+      .values({
+        label,
+        watchKey: expanded.watchKey,
+        kind: "xpub",
+        derivationHint: expanded.accountPath,
+        gapLimit,
+      })
+      .returning();
+    await db.insert(watchedScripts).values(
+      expanded.scripts.map((s) => ({
+        accountId: watch.id,
+        address: s.address,
+        electrumScripthash: s.scripthash,
+        scriptPubKeyHex: s.scriptPubKeyHex,
+        path: s.path,
+      }))
+    );
+    watchAccountId = watch.id;
+  } else if (source === "electrum" && !watchAccountId && !body.scripts?.length) {
     return NextResponse.json(
-      { error: "electrum account requires at least one scripthash" },
+      { error: "electrum wallet requires an xpub or at least one address" },
       { status: 400 }
     );
-  }
-  if (source === "electrum" && !watchAccountId && body.scripts?.length) {
-    const scripts = body.scripts.map((s) => ({
-      ...s,
-      scripthash: normalizeScripthash(s.scripthash),
-    }));
+  } else if (source === "electrum" && !watchAccountId && body.scripts?.length) {
+    let scripts;
+    try {
+      scripts = body.scripts.map((s) => {
+        const resolved = resolveWatch({ scripthash: s.scripthash, address: s.address });
+        return {
+          ...s,
+          scripthash: resolved.scripthash,
+          address: resolved.address ?? s.address,
+          scriptPubKeyHex: s.scriptPubKeyHex ?? resolved.scriptPubKeyHex,
+        };
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+    if (body.preview) {
+      return NextResponse.json({
+        preview: true,
+        emptyWatch: false,
+        address: scripts[0]?.address ?? null,
+      });
+    }
     const [watch] = await db
       .insert(watchedAccounts)
       .values({
@@ -76,6 +198,7 @@ export async function POST(req: Request) {
         accountId: watch.id,
         address: s.address,
         electrumScripthash: s.scripthash,
+        scriptPubKeyHex: s.scriptPubKeyHex,
         path: s.path,
       }))
     );
@@ -106,5 +229,19 @@ export async function POST(req: Request) {
     })
     .returning();
 
-  return NextResponse.json({ account: serializeBigints(account) }, { status: 201 });
+  let sync: unknown = null;
+  if (source === "electrum" && account.watchAccountId) {
+    try {
+      const { syncOrganizerWallet } = await import("@/lib/organizer/syncWallet");
+      const result = await syncOrganizerWallet(db, account.id);
+      if (!("error" in result)) sync = serializeBigints(result);
+    } catch (e) {
+      sync = { error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  return NextResponse.json(
+    { account: serializeBigints(account), discovery: discoveryMeta, sync },
+    { status: 201 }
+  );
 }
