@@ -63,6 +63,18 @@ export function filterByFlavor(row: CoinRow, flavor: Tip): boolean {
   return row.knots.status !== "absent";
 }
 
+export type CatalogFilter = "all" | "core" | "knots" | "spills";
+
+export function filterCatalogRows<T extends CoinRow & { spill: boolean }>(
+  rows: T[],
+  mode: CatalogFilter
+): T[] {
+  if (mode === "all") return rows;
+  if (mode === "core") return rows.filter((r) => filterByFlavor(r, "core"));
+  if (mode === "knots") return rows.filter((r) => filterByFlavor(r, "knots"));
+  return rows.filter((r) => r.spill);
+}
+
 export function annotate(row: CoinRow) {
   return {
     ...row,

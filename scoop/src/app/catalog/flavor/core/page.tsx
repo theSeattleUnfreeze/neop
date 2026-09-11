@@ -1,11 +1,5 @@
-import { CatalogClient } from "@/components/CatalogClient";
+import { redirect } from "next/navigation";
 
-export default function CoreFlavorPage() {
-  return (
-    <CatalogClient
-      mode="core"
-      title="Core flavor"
-      blurb="UTXOs present on the Core tip (including the Core side of both)."
-    />
-  );
+export default function CoreFlavorRedirect() {
+  redirect("/wallets");
 }

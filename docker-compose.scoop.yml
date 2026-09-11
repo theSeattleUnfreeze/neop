@@ -29,6 +29,8 @@ services:
       SCOOP_DATABASE_URL: postgres://scoop:scoop@postgres-scoop:5432/scoop
       FULCRUM_URL: ${FULCRUM_URL:-tcp://host.docker.internal:15001}
       SHULCRUM_URL: ${SHULCRUM_URL:-tcp://host.docker.internal:15011}
+      # StartOS Electrum SSL uses a self-signed cert; set to 0 to enforce CA verify.
+      SCOOP_ELECTRUM_TLS_INSECURE: ${SCOOP_ELECTRUM_TLS_INSECURE:-1}
     ports:
       - "127.0.0.1:3847:3847"
     extra_hosts:

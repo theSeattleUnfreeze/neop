@@ -1,5 +1,5 @@
-import { AccountsClient } from "@/components/AccountsClient";
+import { redirect } from "next/navigation";
 
-export default function AccountsPage() {
-  return <AccountsClient />;
+export default function AccountsRedirect() {
+  redirect("/wallets");
 }

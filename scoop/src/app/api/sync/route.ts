@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { normalizeScripthash } from "@/lib/electrum/scripthash";
+import { resolveWatch } from "@/lib/electrum/address";
 import { coinRowFromTips } from "@/lib/sync/buildRows";
 import { envElectrumUrls, fetchScriptTip } from "@/lib/sync/fetchTip";
 
 export const runtime = "nodejs";
 
 type Body = {
-  scripts?: { id?: number; scripthash: string; address?: string }[];
+  scripts?: { id?: number; scripthash?: string; address?: string }[];
 };
 
-/** Pull Fulcrum + Shulcrum state for given scripthashes (or all DB scripts). */
+/** Pull Fulcrum + Shulcrum state for given addresses (or all watched wallet addresses). */
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Body;
   const urls = envElectrumUrls();
@@ -27,13 +27,17 @@ export async function POST(req: Request) {
     accountId?: number;
     watchAccountId?: number;
   };
-  let scripts: ScriptIn[] = (body.scripts ?? []) as ScriptIn[];
-  if (scripts.length) {
+  let scripts: ScriptIn[] = [];
+  if (body.scripts?.length) {
     try {
-      scripts = scripts.map((s) => ({
-        ...s,
-        scripthash: normalizeScripthash(s.scripthash),
-      }));
+      scripts = body.scripts.map((s) => {
+        const resolved = resolveWatch({ scripthash: s.scripthash, address: s.address });
+        return {
+          ...s,
+          scripthash: resolved.scripthash,
+          address: resolved.address ?? s.address,
+        };
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return NextResponse.json({ error: message }, { status: 400 });

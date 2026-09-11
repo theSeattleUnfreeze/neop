@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   annotate,
   filterByFlavor,
+  filterCatalogRows,
   isCoreBoundSuccess,
   isSpill,
   presenceOf,
@@ -11,7 +12,7 @@ import {
 } from "./presence.ts";
 import { coinRowFromTips, detectSpills } from "../sync/buildRows.ts";
 import { electrumScripthashFromScriptPubKey, normalizeScripthash } from "../electrum/scripthash.ts";
-import { parseElectrumUrl } from "../electrum/client.ts";
+import { parseElectrumUrl, electrumTlsRejectUnauthorized } from "../electrum/client.ts";
 
 const unspent = (txid = "aa".repeat(32)): TipView => ({
   status: "unspent",
@@ -33,6 +34,22 @@ describe("presence", () => {
     assert.equal(presenceOf(absent, unspent()), "knots_only");
     assert.equal(presenceOf(unspent(), unspent()), "both");
     assert.equal(presenceOf(absent, absent), "none");
+  });
+
+  it("filters All / Core / Knots chips", () => {
+    const both = annotate({ scriptId: 1, core: unspent(), knots: unspent() });
+    const coreOnly = annotate({ scriptId: 2, core: unspent(), knots: absent });
+    const knotsOnly = annotate({ scriptId: 3, core: absent, knots: unspent() });
+    const spillRow = annotate({
+      scriptId: 4,
+      core: spent(),
+      knots: spent(),
+    });
+    const rows = [both, coreOnly, knotsOnly, spillRow];
+    assert.equal(filterCatalogRows(rows, "all").length, 4);
+    assert.equal(filterCatalogRows(rows, "core").length, 3);
+    assert.equal(filterCatalogRows(rows, "knots").length, 3);
+    assert.equal(filterCatalogRows(rows, "spills").length, 1);
   });
 
   it("detects core-bound success without spill", () => {
@@ -189,6 +206,12 @@ describe("electrum helpers", () => {
       tls: false,
     });
     assert.equal(parseElectrumUrl("ssl://node.local:50002").tls, true);
+  });
+
+  it("accepts self-signed Electrum TLS unless INSECURE=0", () => {
+    assert.equal(electrumTlsRejectUnauthorized({}), false);
+    assert.equal(electrumTlsRejectUnauthorized({ SCOOP_ELECTRUM_TLS_INSECURE: "1" }), false);
+    assert.equal(electrumTlsRejectUnauthorized({ SCOOP_ELECTRUM_TLS_INSECURE: "0" }), true);
   });
 
   it("normalizes scripthash", () => {
