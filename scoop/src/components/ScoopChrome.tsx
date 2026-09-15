@@ -46,6 +46,17 @@ export function ScoopChrome({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+      <p className="scoop-ln-note muted">
+        Lightning channels: follow the{" "}
+        <a
+          href="https://gist.github.com/chrisguida/819e2725927e49934a583184b222bc71"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          BLAKE2b Lightning rescue plan
+        </a>{" "}
+        (external SoT). Scoop catalogs wallet UTXOs only.
+      </p>
       <main className="scoop-main">{children}</main>
     </div>
   );

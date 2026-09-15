@@ -7,6 +7,13 @@ Optional **read-only** dual-tip wallet UI for Neapolitan (`neop`). Catalogs whic
 Scoop does **not** sign, broadcast, or speak Electrum to wallets. It watches your Core and Knots
 Electrum servers (`FULCRUM_URL` / `SHULCRUM_URL`) and stores results in local Postgres.
 
+**Lightning channels** are not migrated by Scoop. Operators should follow the external standard:
+
+- [chrisguida Lightning on BLAKE2b master plan](https://gist.github.com/chrisguida/819e2725927e49934a583184b222bc71)
+- In-repo digest: [lightning.md](lightning.md)
+
+Wallet UTXO split doctrine (taint first; OP_RETURN RDTS garnish only): [replay.md](replay.md).
+
 Default **testnet4** examples use `:15001` / `:15011`. For **mainnet** presets (self-hosted Linux
 `50001`/`50002`, StartOS dynamic SSL, Umbrel), see [electrum.md](electrum.md#hosting-presets-scoop--wallets).
 
@@ -148,7 +155,7 @@ Colors: Core = chocolate brown; Knots = pink; Both = cream (contrast adjusts for
 |--------|---------|
 | **Replay receive** | Same outpoint **unspent** on Core and Knots — inbound payment replayed; split before spend |
 | **Spill** | Same lineage **spent** on both tips — dual-effect spend |
-| **Core-bound ok** | Core spent, Knots still unspent — expected after Core-bound ceremony |
+| **Core-bound ok** | Core spent, Knots still unspent — expected after a Core-side split (taint or temporary OP_RETURN garnish under RDTS) |
 
 Notifications are **in-app only** (on sync / page load). No email or push in v1.
 
