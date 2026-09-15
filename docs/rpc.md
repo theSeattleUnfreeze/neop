@@ -2,7 +2,7 @@
 
 Network enum: `testnet4` | `regtest` | `main`. Development default: **`testnet4`**.
 
-Flavor enum for live wallet paths: `legacy` | `blake2b` (aliases for the **Core** and **Knots** chains). Optional archive: `rdts_sha256` (read-only / not for ordinary send). Prefer **Core / Knots** in UI copy; see [replay.md](replay.md) for wedges and `protectwallet`.
+Flavor enum for live wallet paths: `legacy` | `blake2b` (aliases for the **Core** and **Knots** chains). Optional archive: `rdts_sha256` (read-only / not for ordinary send). Prefer **Core / Knots** in UI copy; see [replay.md](replay.md) for taint / wedges and `protectwallet`. Lightning channels: [lightning.md](lightning.md).
 
 This is the contract for clients (dashboard, Sparrow, Shrike). Engines remain Core / Knots behind the mux — neopd does not invent consensus RPC.
 
@@ -37,7 +37,7 @@ Every UTXO includes:
 | `flavor_presence` | `legacy_only` \| `blake2b_only` \| `both` (optional `rdts_sha256_only`; prefer documenting as Core-only / Knots-only / both) |
 | `replay_risk` | `none` \| `exposed` |
 
-Clients MUST surface presence before send. `both` coins are not spendable via ordinary send until ceremony, a unique input, or an embedded wedge exists. Full policy: [replay.md](replay.md).
+Clients MUST surface presence before send. `both` coins are not spendable via ordinary send until ceremony, a **unique input (taint)**, or an embedded wedge exists. Full policy: [replay.md](replay.md).
 
 ## Send (replay-safe)
 
@@ -50,7 +50,7 @@ Required:
 
 Behavior:
 
-1. If the tx would still be valid on the non-selected tip → error `replay_risk_unresolved` unless unique-input, `allow_dual_effect: true`, or (Core / `legacy` only) an embedded OP_RETURN scriptPubKey **> 83 bytes** in `hex`. Knots #357 sighash wedge: **planned**. See [replay.md](replay.md) Implementation status.
+1. If the tx would still be valid on the non-selected tip → error `replay_risk_unresolved` unless **unique-input (taint)**, `allow_dual_effect: true`, (Core / `legacy` only) an embedded OP_RETURN scriptPubKey **> 83 bytes** in `hex` (**RDTS garnish**, temporary), or (Knots / `blake2b` only) a Taproot key-path witness signature ending in **0x21** when #357 is enforced. See [replay.md](replay.md).
 2. Broadcast **only** to the selected flavor’s P2P/mempool.
 3. On success, return a **confidence receipt**:
 
@@ -79,7 +79,7 @@ One-time (or re-protect) ceremony to partition `both` UTXOs. See [replay.md](rep
 }
 ```
 
-Returns a plan of Core-bound (OP_RETURN > 83) and Knots-bound (#357 when available) transactions / status. Staged protect: Core pass may run before Knots #357 is live.
+Returns a plan of Core-bound (OP_RETURN > 83 **RDTS garnish**) and Knots-bound (#357 when available) transactions / status. Prefer Knots-first + taint for lasting Core-only lineage; OP_RETURN-only Core passes are temporary under RDTS. Staged protect: Core garnish may run before Knots #357 is live.
 
 ### `getreplaystatus` (planned)
 
@@ -104,7 +104,7 @@ Client pairing: Sparrow → Fulcrum; Shrike → Shulcrum. See [wallets.md](walle
 | `getblockchaininfo` | Requires `flavor`; proxies pinned engine |
 | `help` | Method list |
 | `listcoins` | Catalog with flavor_presence / replay_risk |
-| `sendrawtransaction` | Flavor-scoped; default-deny replay; unique-input / `allow_dual_effect` / Core OP_RETURN wedge (>83) when `flavor=legacy`; Knots #357 planned; confidence receipt |
+| `sendrawtransaction` | Flavor-scoped; default-deny replay; unique-input (taint) / `allow_dual_effect` / Core OP_RETURN garnish (>83, RDTS-window) when `flavor=legacy`; Knots 0x21 unified sighash when `flavor=blake2b`; confidence receipt |
 
 Never silent dual-broadcast.
 
