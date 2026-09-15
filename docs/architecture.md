@@ -43,14 +43,15 @@ Do **not** fork Blake2b hashing into neop. Testnet4 Electrum ports: `15001` (Cor
 Same network magic means wire isolation alone is not enough. Protection is layered and **default-deny**. Normative detail: **[replay.md](replay.md)**.
 
 1. Catalog labels: `core_only` | `knots_only` | `both` (replay-exposed; RPC may still say `legacy_only` / `blake2b_only`)
-2. Refuse spends still valid on the non-selected tip unless unique-input, an embedded **wedge**, or `allow_dual_effect: true`
-3. **Core-bound wedge:** `OP_RETURN` scriptPubKey **> 83 bytes** (invalid on Knots reduced-data / RDTS policy)
+2. Refuse spends still valid on the non-selected tip unless **unique-input (taint)**, an embedded **wedge**, or `allow_dual_effect: true`
+3. **Primary lasting Core bind:** taint / unique-input (Core shipped no lasting replay protection). Prefer Knots-first unified spends, then Core twins
 4. **Knots-bound wedge:** opt-in Knots sighash ([#357](https://github.com/bitcoinknots/bitcoin/pull/357)) when enforced
-5. One-time `protectwallet` ceremony to partition `both` UTXOs; unique-input thereafter
-6. Broadcast only to the selected chain’s mempool
-7. Confidence receipt: `{ chain, txid, other_chain_affected: false }` (RPC may still say `flavor` / `other_flavor_affected`)
+5. **Temporary Core garnish:** `OP_RETURN` scriptPubKey **> 83 bytes** while RDTS ≤83 holds (expires 2027-09-01) — never alone as permanent protection
+6. One-time `protectwallet` ceremony to partition `both` UTXOs; unique-input thereafter
+7. Broadcast only to the selected chain’s mempool
+8. Confidence receipt: `{ chain, txid, other_chain_affected: false }` (RPC may still say `flavor` / `other_flavor_affected`)
 
-Never silent dual-broadcast. Never claim PoW alone stops replays.
+Never silent dual-broadcast. Never claim PoW alone stops replays. Lightning channel migration: [lightning.md](lightning.md) (gist is SoT).
 
 ## Scoop (optional)
 
@@ -59,6 +60,6 @@ Never silent dual-broadcast. Never claim PoW alone stops replays.
 ## Out of scope for v1
 
 - Profitable Blake2b mining / DATUM ops
-- Lightning on both tips
+- Lightning migration tooling (forkward / CLN adapters / mirror broadcast) — see [lightning.md](lightning.md); external gist is SoT for channel splits
 - Treating stalled RDTS SHA-256 as a spend path
 - testnet3 (use testnet4 only)

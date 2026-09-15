@@ -110,13 +110,13 @@ Pin engine versions; **do not reimplement** Blake2b PoW, v2 header crypto, conse
 | **`neopd`** | Shared pre-split SHA-256 archive mux, dual chainstates, flavor-scoped RPC, replay-safe catalog/send, wallet UX glue | Consensus crypto, mining/DATUM |
 | Electrum | Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) for **Knots chain**; **Fulcrum only** (not electrs) for **Core chain** | Forking Blake2b hashing into neop |
 
-**Ethos:** the user picks a chain; **only that chain is affected** by a spend. Default-deny replay-exposed UTXOs present on **both** chains; ceremony / unique inputs / wedges; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
+**Ethos:** the user picks a chain; **only that chain is affected** by a spend. Default-deny replay-exposed UTXOs present on **both** chains; ceremony / **taint (unique inputs)** / wedges; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
 
-**Replay (agents):** Core-bound wedge = `OP_RETURN` scriptPubKey **> 83 bytes**; Knots-bound wedge = opt-in sighash ([#357](https://github.com/bitcoinknots/bitcoin/pull/357)) when enforced; one-time `protectwallet` partitions `both` coins. Normative: [docs/replay.md](docs/replay.md).
+**Replay (agents):** lasting Core bind = **taint / unique-input** (prefer Knots-first unified, then Core twins); Knots-bound wedge = opt-in sighash ([#357](https://github.com/bitcoinknots/bitcoin/pull/357)) when enforced; OP_RETURN scriptPubKey **> 83** is **temporary RDTS garnish only** (expires 2027-09-01); one-time `protectwallet` partitions `both` coins. Normative: [docs/replay.md](docs/replay.md). Lightning channels: [docs/lightning.md](docs/lightning.md) (gist SoT).
 
 **Wallets (agents):** Core = Sparrow + Fulcrum; Knots = Shrike + Shulcrum — no stock-Sparrow profile switcher. See [docs/wallets.md](docs/wallets.md), [docs/deploy-metal.md](docs/deploy-metal.md), [docs/electrum.md](docs/electrum.md).
 
-See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/replay.md](docs/replay.md), [docs/deploy-metal.md](docs/deploy-metal.md), [docs/wallets.md](docs/wallets.md), [docs/electrum.md](docs/electrum.md), [docs/testnet4.md](docs/testnet4.md), [docs/hosting.md](docs/hosting.md).
+See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/replay.md](docs/replay.md), [docs/lightning.md](docs/lightning.md), [docs/deploy-metal.md](docs/deploy-metal.md), [docs/wallets.md](docs/wallets.md), [docs/electrum.md](docs/electrum.md), [docs/testnet4.md](docs/testnet4.md), [docs/hosting.md](docs/hosting.md).
 
 ### Conventions
 
