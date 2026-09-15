@@ -69,6 +69,17 @@ a {
   margin-bottom: 1.25rem;
 }
 
+.scoop-ln-note {
+  margin: -0.5rem 0 1.25rem;
+  font-size: 0.85rem;
+  max-width: 42rem;
+}
+
+.scoop-ln-note a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .scoop-nav a {
   display: inline-flex;
   align-items: center;
