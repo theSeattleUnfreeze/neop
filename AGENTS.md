@@ -108,13 +108,13 @@ Pin engine versions; **do not reimplement** Blake2b PoW, v2 header crypto, conse
 |-------|------|------------------|
 | Knots node (Knots chain) / pre-RDTS Knots or Bitcoin Core node (Core chain) | Tip validation for the selected chain | Wallet UX, dual-flavor mux |
 | **`neopd`** | Shared pre-split SHA-256 archive mux, dual chainstates, flavor-scoped RPC, replay-safe catalog/send, wallet UX glue | Consensus crypto, mining/DATUM |
-| Electrum | Vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) for **Knots chain**; **Fulcrum only** (not electrs) for **Core chain** | Forking Blake2b hashing into neop |
+| Electrum | Vendor/run [privkeyio/Fulcrum v2.1.2-blake-3](https://github.com/privkeyio/Fulcrum/releases/tag/v2.1.2-blake-3) for **Knots chain** (Shulcrum alternative for protocol 1.7); **Fulcrum only** (not electrs) for **Core chain** | Forking Blake2b hashing into neop |
 
 **Ethos:** the user picks a chain; **only that chain is affected** by a spend. Default-deny replay-exposed UTXOs present on **both** chains; ceremony / **taint (unique inputs)** / wedges; confidence receipts (`other_flavor_affected: false`). Never silent dual-broadcast. PoW alone is **not** replay protection (same network magic).
 
 **Replay (agents):** lasting Core bind = **taint / unique-input** (prefer Knots-first unified, then Core twins); Knots-bound wedge = opt-in sighash ([#357](https://github.com/bitcoinknots/bitcoin/pull/357)) when enforced; OP_RETURN scriptPubKey **> 83** is **temporary RDTS garnish only** (expires 2027-09-01); one-time `protectwallet` partitions `both` coins. Normative: [docs/replay.md](docs/replay.md). Lightning channels: [docs/lightning.md](docs/lightning.md) (gist SoT).
 
-**Wallets (agents):** Core = Sparrow + Fulcrum; Knots = Shrike + Shulcrum — no stock-Sparrow profile switcher. See [docs/wallets.md](docs/wallets.md), [docs/deploy-metal.md](docs/deploy-metal.md), [docs/electrum.md](docs/electrum.md).
+**Wallets (agents):** Core = Sparrow + Fulcrum; Knots = Shrike + privkeyio Fulcrum (or Shulcrum) — no stock-Sparrow profile switcher. See [docs/wallets.md](docs/wallets.md), [docs/deploy-metal.md](docs/deploy-metal.md), [docs/electrum.md](docs/electrum.md).
 
 See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/replay.md](docs/replay.md), [docs/lightning.md](docs/lightning.md), [docs/deploy-metal.md](docs/deploy-metal.md), [docs/wallets.md](docs/wallets.md), [docs/electrum.md](docs/electrum.md), [docs/testnet4.md](docs/testnet4.md), [docs/hosting.md](docs/hosting.md).
 
@@ -139,7 +139,7 @@ Apply on every Real Steel pass for this repo. Prefer fund / privacy / replay saf
 - **Chain naming** — user-facing and docs say **Core** / **Knots** (RPC may still say `legacy` / `blake2b`); reject “Corecoin”-style coin names
 - **Shared pre-split archive** — `scripts/archive-blocks.sh` keeps FlyTheElephant1 safety rules (idempotent symlinks, never clobber a real file, permission checks, conservative cut-off); Blake2b tip files stay out of the shared archive; bootstrap must not force a second pre-fork IBD or reindex an already-supported flavor’s chainstate
 - **Secrets & placeholders** — no `.env` / RPC creds in the tree; docs use `STARTOS_HOST` / `VPS_PUBLIC_IP`-style placeholders
-- **Electrum split** — Fulcrum for Core, Shulcrum for Knots; do not fork Blake2b hashing into `neopd`
+- **Electrum split** — Fulcrum for Core, privkeyio Fulcrum (or Shulcrum) for Knots; do not fork Blake2b hashing into `neopd`
 - **Scoop threat model** — bind defaults stay loopback; no private keys; xpubs/descriptors treated as sensitive
 - **Testnet4 before mainnet** — consensus / wallet behavior validated on testnet4 (or regtest Blake2b) before mainnet claims
 - **Scope hygiene** — one concern per PR; anonymity tooling not mixed into feature PRs unless required
