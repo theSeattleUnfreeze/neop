@@ -26,17 +26,21 @@ Use **[Fulcrum](https://github.com/cculianu/Fulcrum)** (or a Blake2b-capable bui
 
 **Do not recommend electrs** in neop deployments.
 
-## Knots chain — Blake2b-capable Fulcrum or Shulcrum
+## Knots chain — privkeyio Fulcrum (pinned) or Shulcrum
 
-Preferred for StartOS / packaged Blake2b: **[privkeyio/Fulcrum](https://github.com/privkeyio/fulcrum)** (and [fulcrum-startos](https://github.com/privkeyio/fulcrum-startos)) — variable headers, SSL Electrum, signed releases.
+**Recommended:** pin **[privkeyio/Fulcrum v2.1.2-blake-3](https://github.com/privkeyio/Fulcrum/releases/tag/v2.1.2-blake-3)** against the Knots tip (v2-header / `headers_v2` support, Electrum protocol ≤1.6). Windows / Linux release assets and [fulcrum-startos](https://github.com/privkeyio/fulcrum-startos) packages are fine as long as they match that pin.
 
-Alternative: [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) (`blake2b-headers`). Clone/build: [vendor/README.md](../vendor/README.md).
+**Alternative:** [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) (`blake2b-headers`) when you need protocol **1.7** + `blockchain.pow_algorithms`. Clone/build: [vendor/README.md](../vendor/README.md). Confirm Shrike against ≤1.6 before treating Shulcrum-only features as required.
 
 - Variable header length (80 or ~164) per version bit 31
 - Protocol ≥1.6: `blockchain.block.headers` as a **list of hex strings**
 - Shulcrum may also expose protocol **1.7** + `blockchain.pow_algorithms`; privkeyio Fulcrum currently tops out at **1.6** with correct header hashing
 
 Wallet client for Knots: **[Shrike](https://github.com/privkeyio/shrike/releases)** — not stock Sparrow. See [wallets.md](wallets.md).
+
+### Fork-height snapshot (fast dual-flavor Electrum)
+
+When a fully synced Knots Fulcrum index is available, a resume-safe reverse walk to the last common height (**961,631** on mainnet) can snapshot the pre-split transaction index. Clone that snapshot and forward-index each tip’s post-split tail instead of walking the full history twice. Requires a Fulcrum build with `--rewind-to-height` (local `feat/rewind-to-height` on the privkeyio tree until upstreamed) and `getblock` verbosity **3** (or txindex + prevout lookups). Do not rewind a live production datadir — copy first.
 
 ## Post-IBD bring-up (operator)
 

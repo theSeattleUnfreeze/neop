@@ -7,7 +7,7 @@ Neapolitan reuses a **shared pre-split SHA-256 `blocks/` archive** so you can ru
 | Shared / cheaper | Still your job to verify |
 |------------------|---------------------------|
 | One pre-split **`blocks/`** (~not 2× IBD) | Pinned engines (Core / pre-RDTS Knots + Blake2b Knots) |
-| Dual **chainstates** (tens of GB each, not another ~800GB) | **Fulcrum** and **Shulcrum** binaries, config, and indexes |
+| Dual **chainstates** (tens of GB each, not another ~800GB) | **Fulcrum** (Core + Knots) and optional **Shulcrum** binaries, config, and indexes |
 | Optional shared Electrum index + flavor deltas | **Sparrow** and **[Shrike](https://github.com/privkeyio/shrike/releases)** releases |
 | Compose wiring on one host | That each wallet talks to the intended Electrum tip |
 
@@ -51,7 +51,7 @@ Stop nodes before moving open `blk*.dat` files. Use [`scripts/archive-blocks.sh`
 1. Copy or mount blocks onto the **Linux neop host**; run the archive ceremony into shared `blocks/` per above. StartOS remains an optional SHA-256 peer per [hosting.md](hosting.md) — not the dual-flavor wallet host.
 2. Bootstrap **Core** `blocks-core/` with `-a`; run a **legacy engine** (Core v29 or pre-RDTS Knots) with shared `blocksdir` + new `chainstate-legacy`.
 3. Expect a **chainstate rebuild on Core only** — not a second IBD. Do **not** reindex `chainstate-blake2b` for the side you already support.
-4. Wallets: **Sparrow → Fulcrum** (Core). **Shrike → Shulcrum** (Knots). Never point stock Sparrow at Blake2b Knots RPC or at Shulcrum’s Blake2b tip.
+4. Wallets: **Sparrow → Fulcrum** (Core). **Shrike → privkeyio Fulcrum or Shulcrum** (Knots). Never point stock Sparrow at Blake2b Knots RPC or at a Blake2b Electrum tip.
 
 ### 3. Fresh neop compose
 
@@ -59,7 +59,7 @@ One shared `blocks/`; first sync is IBD **once**, then both tips share it. See [
 
 ## Electrum after engines are healthy
 
-neop does **not** own Electrum ports. **Fulcrum** (`:15001` on testnet4) and **Shulcrum** (`:15011`) do. neop compose/docs help bring them up and index after IBD. Details: [electrum.md](electrum.md). Print pairing with `python -m neop_cli electrum-endpoints` when the CLI is installed.
+neop does **not** own Electrum ports. **Fulcrum** (`:15001` on testnet4) and Knots Electrum (`:15011`, privkeyio Fulcrum or Shulcrum) do. neop compose/docs help bring them up and index after IBD. Details: [electrum.md](electrum.md). Print pairing with `python -m neop_cli electrum-endpoints` when the CLI is installed.
 
 ## Ceremony without waiting on Electrum
 
