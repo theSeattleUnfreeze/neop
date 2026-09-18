@@ -42,6 +42,10 @@ Wallet client for Knots: **[Shrike](https://github.com/privkeyio/shrike/releases
 
 When a fully synced Knots Fulcrum index is available, a resume-safe reverse walk to the last common height (**961,631** on mainnet) can snapshot the pre-split transaction index. Clone that snapshot and forward-index each tip’s post-split tail instead of walking the full history twice. Requires a Fulcrum build with `--rewind-to-height` (local `feat/rewind-to-height` on the privkeyio tree until upstreamed) and `getblock` verbosity **3** (or txindex + prevout lookups). Do not rewind a live production datadir — copy first.
 
+`scripts/neop-rsync --startos-package fulcrum` is the StartOS copy path. It stops that package before the transfer and starts it again when the copy finishes or fails (`--dry-run` does not touch the service). StartOS volumes are root-owned, so the remote side defaults to `sudo rsync`.
+
+`scripts/fulcrum-walk-tui.py` draws the active leg of that walk: direction, source height, destination height, and progress. `--bitcoin-cli` is an optional path to the `bitcoin-cli` program so the Core tip can be shown as a number.
+
 ## Post-IBD bring-up (operator)
 
 1. Both engines healthy on the shared `blocks/` layout ([deploy-metal.md](deploy-metal.md)).
