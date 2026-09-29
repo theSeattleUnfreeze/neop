@@ -39,7 +39,10 @@ RE_PROCESSED = re.compile(r"Processed height: (\d+)")
 RE_DOWNLOADING = re.compile(r"Block height (\d+), downloading")
 RE_UPTODATE = re.compile(r"Block height (\d+), up-to-date")
 RE_FAIL = re.compile(r"Rewind-to-height failed: (.*)")
+RE_PAUSED = re.compile(r"Rewind paused at height (\d+)")
+RE_CANNOT = re.compile(r"Rewind-to-height cannot continue automatically")
 RE_COMPLETE = re.compile(r"Rewind complete at height (\d+)")
+RE_MOVED = re.compile(r"tip now \d+|Rewound via stored undo to height \d+")
 
 
 def _docker_bin() -> str:
@@ -126,6 +129,15 @@ def parse_logs(text: str) -> dict:
     }
 
 
+def rewind_waiting(text: str) -> bool:
+    """True when the newest rewind log is a bitcoind pause, not a finished undo."""
+    paused = list(RE_PAUSED.finditer(text))
+    if not paused:
+        return False
+    moved = list(RE_MOVED.finditer(text))
+    return not moved or paused[-1].start() > moved[-1].start()
+
+
 def fmt_h(n: Optional[int]) -> str:
     if n is None:
         return "------"
@@ -178,6 +190,8 @@ def snapshot(args: argparse.Namespace) -> str:
 
     if forward == "running" or (rewind == "exited-ok" and forward != "absent"):
         phase = "forward"
+    elif rewind == "running" and rewind_waiting(rewind_logs):
+        phase = "waiting"
     elif rewind == "running":
         phase = "reverse"
     elif rewind == "exited-fail":
@@ -190,7 +204,8 @@ def snapshot(args: argparse.Namespace) -> str:
         phase = "idle"
 
     if phase == "forward":
-        now = fw["processed"] or fw["uptodate"] or fork
+        seen = [h for h in (fw["processed"], fw["uptodate"]) if h is not None]
+        now = max(seen) if seen else fork
         dest = core or fw["downloading"] or fw["uptodate"]
         source_h = fork
         direction = "FORWARD"
@@ -203,7 +218,9 @@ def snapshot(args: argparse.Namespace) -> str:
         now = rw["tip"] if rw["tip"] is not None else rw["complete"]
         dest = fork
         source_h = origin
-        if phase == "stopped":
+        if phase == "waiting":
+            direction = "WAITING"
+        elif phase == "stopped":
             direction = "STOPPED"
         elif phase == "handoff":
             direction = "HANDOFF"
@@ -239,7 +256,10 @@ def snapshot(args: argparse.Namespace) -> str:
         sample = undos[-20:]
         rate = sum(ms for _b, _n, ms, _now in sample) / len(sample) / 1000.0
     eta = None
-    if rate and left:
+    if phase in ("waiting", "stopped"):
+        # A frozen log must not keep advertising the last undo's ETA.
+        rate = None
+    elif rate and left:
         eta = rate * left
 
     last = ""
@@ -253,7 +273,7 @@ def snapshot(args: argparse.Namespace) -> str:
     elif rw["fail"]:
         last = "last error    " + str(rw["fail"])[:48]
 
-    leg2_dest = fmt_h(core) if core is not None else "Core tip"
+    leg2_dest = fmt_h(core) if core is not None else "tip"
     lines = [
         "FULCRUM INDEX WALK",
         "",
@@ -275,8 +295,13 @@ def snapshot(args: argparse.Namespace) -> str:
         lines.append(last)
     if phase == "handoff":
         lines.append("note          rewind exited clean; Core forward should start")
-    if phase == "stopped" and rw["fail"] and "timed out" in str(rw["fail"]):
-        lines.append("note          timeout; marker keeps the height, resume is safe")
+    if phase == "waiting":
+        lines.append("note          bitcoind dropped; resumes when it answers")
+    if phase == "stopped":
+        if RE_CANNOT.search(rewind_logs):
+            lines.append("note          not a dropped link; read the log before restart")
+        else:
+            lines.append("note          marker keeps this height; start the same datadir")
     return frame(lines)
 
 
