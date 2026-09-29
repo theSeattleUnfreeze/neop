@@ -46,6 +46,8 @@ When a fully synced Knots Fulcrum index is available, a resume-safe reverse walk
 
 `scripts/fulcrum-walk-tui.py` draws the active leg of that walk: direction, source height, destination height, and progress. `--bitcoin-cli` is an optional path to the `bitcoin-cli` program so the Core tip can be shown as a number.
 
+The first measured pass, on a spinning platter, is [benchmarks/fulcrum-fork-walk-hdd.md](benchmarks/fulcrum-fork-walk-hdd.md). Drive model and interface are still blank.
+
 ## Post-IBD bring-up (operator)
 
 1. Both engines healthy on the shared `blocks/` layout ([deploy-metal.md](deploy-metal.md)).
