@@ -1,18 +1,19 @@
 # Fulcrum fork walk — HDD pass
 
-First measured reverse-then-forward walk of a Knots Fulcrum index down to the last common block, then forward on the Core chain. This pass is the **spinning platter / HDD** run. A later pass can reuse the same table with different media.
+First measured reverse-then-forward walk of a Knots Fulcrum index down to the last common block, then forward on the Core chain.
 
-Drive model, interface, and capacity are not filled in yet.
+This pass was first labelled the spinning-platter run. The Fulcrum index datadir was actually on an **NVMe SSD**; only the Core node it read during the forward leg was on a hard drive. The filename is kept so existing links still work.
 
 ## Storage
 
 | | |
 |--|--|
-| Media | Spinning platter (HDD) |
-| Model | |
-| Interface | |
-| Capacity | |
+| Fulcrum index datadir | NVMe SSD: Samsung SSD 970 EVO 1TB (932 GB), PCIe NVMe |
+| Core node (forward leg's bitcoind) | HDD: Seagate ST4000DM004 (3.7 TB, SATA, shingled/SMR) |
+| Knots node (reverse leg's bitcoind) | Remote StartOS host over an SSH tunnel; media not recorded |
 | What was timed | The Fulcrum index datadir. Not the Core block archive. |
+
+Round trip ([#29](https://github.com/theSeattleUnfreeze/neop/issues/29)), for comparison: a stored-undo rewind of Core blocks 969,515 → 969,512 on a copy of this index on the ST4000DM004 took 163–389 s per block (3,700–6,900 transactions each). The same blocks on the 970 EVO took 13–58 s.
 
 The Knots index copy was about **191 GB** when the walk started.
 

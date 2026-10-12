@@ -15,7 +15,7 @@ Self-hosted Linux Fulcrum defaults match upstream: plaintext **50001**, SSL **50
 | Host | How ports work | What to put in `FULCRUM_URL` / `SHULCRUM_URL` |
 |------|----------------|-----------------------------------------------|
 | **Self-hosted Linux** | Operator picks binds; Fulcrum defaults **tcp `50001`**, **ssl `50002`** | e.g. `tcp://127.0.0.1:50001`, `ssl://127.0.0.1:50002` |
-| **StartOS** | **Dynamic** LAN/Tor ports from **Interfaces** (often not 50001/50002). Copy the `ssl://host:port` shown for **Electrum (SSL)** — do not assume a fixed number. Common StartOS Bitcoin RPC LAN port is **57747**; Electrum SSL is assigned separately (example: `49436`). Prefer the **raw LAN IP** if `.local` mDNS fails. | e.g. `ssl://192.168.0.13:49436` (your Interfaces URL) |
+| **StartOS** | **Dynamic** LAN/Tor ports from **Interfaces** (often not 50001/50002). Copy the `ssl://host:port` shown for **Electrum (SSL)** — do not assume a fixed number. Common StartOS Bitcoin RPC LAN port is **57747**; Electrum SSL is assigned separately (example: `49436`). Prefer the **raw LAN IP** if `.local` mDNS fails. | e.g. `ssl://STARTOS_HOST:49436` (your Interfaces URL) |
 | **Umbrel** | Service UI shows Electrum host/port (often Tor + LAN). Use the address Umbrel prints; plaintext vs SSL depends on the app. | Copy from Umbrel → Fulcrum / Electrum service |
 
 Scoop accepts `tcp://`, `ssl://`, and `tls://`. StartOS Fulcrum packages expose **SSL only** off-box; set `SCOOP_ELECTRUM_TLS_INSECURE=1` (default in compose) when trusting the StartOS self-signed cert on a private LAN.
@@ -46,7 +46,7 @@ When a fully synced Knots Fulcrum index is available, a resume-safe reverse walk
 
 `scripts/fulcrum-walk-tui.py` draws the active leg of that walk: direction, source height, destination height, and progress. `--bitcoin-cli` is an optional path to the `bitcoin-cli` program so the Core tip can be shown as a number.
 
-The first measured pass, on a spinning platter, is [benchmarks/fulcrum-fork-walk-hdd.md](benchmarks/fulcrum-fork-walk-hdd.md). Drive model and interface are still blank.
+The first measured pass (Knots → Core) is [benchmarks/fulcrum-fork-walk-hdd.md](benchmarks/fulcrum-fork-walk-hdd.md). The round trip back (Core → Knots, issue #29), with rewind profiling and the Knots link hardening, is [benchmarks/fulcrum-roundtrip.md](benchmarks/fulcrum-roundtrip.md).
 
 ## Post-IBD bring-up (operator)
 
