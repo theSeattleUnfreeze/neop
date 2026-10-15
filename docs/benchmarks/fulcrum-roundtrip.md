@@ -35,6 +35,11 @@ The Knots RPC path is: Fulcrum container → `host.docker.internal:15081` → SS
 | 2026-10-09 05:51 | StartOS rebooted, which wiped the proxy from `/tmp`. |
 | 2026-10-11 05:50 | Tunnel and old proxy restarted by hand; still slow, with 10-minute `getblock` timeouts. |
 | 2026-10-12 06:03 | Fixed proxy deployed by the new link watchdog. Forward leg went to 9–45 blocks/s. |
+| 2026-10-12 06:33 | Forward leg reached the Knots tip and followed it from then on. |
+| 2026-10-14 23:15 | Knots on StartOS shut down cleanly (cause unknown, not this run). Both indexes stopped at 977,262. |
+| 2026-10-15 00:15 | Baseline freeze started; round-trip index stopped. |
+| 2026-10-15 00:35 | Restarting Knots while the baseline copy was reading the same disk wedged StartOS for about an hour. The copy failed at 7%, and the copy script's cleanup restarted StartOS Fulcrum. |
+| 2026-10-15 02:10 | Baseline copy restarted with a bandwidth cap. StartOS Fulcrum had advanced, so the round trip will forward to the new baseline tip before the comparison. |
 
 ## Rewind performance
 
@@ -88,6 +93,11 @@ Lessons from writing it:
 - In a hidden window, `ssh` without `-n` waits on stdin forever.
 - PowerShell reuses keep-alive connections, and the node closes idle ones after about 30 s. With a 30 s probe interval, every other probe hit a dead pooled socket and the link looked like it was flapping. Probes now use `-DisableKeepAlive`.
 - `pkill -f` needs an anchored pattern (`^python3 /tmp/rpc-auth-proxy.py`). Otherwise it also matches, and kills, the remote shell whose command line contains the same string.
+- A wedged StartOS can accept the SSH login but never run the command. `ConnectTimeout` and `ServerAlive` don't catch that, and the watchdog hung for 1.5 hours on one call. Remote `ssh` and `scp` calls now have a wall-clock limit (`-RemoteTimeoutSeconds`, default 120).
+
+### StartOS wedged under concurrent I/O
+
+Knots startup while `rsync` read the 200 GB Fulcrum database from the same disk left StartOS answering pings and its web UI, but unable to start new processes, for about an hour. No reboot was needed. The baseline copy now runs with `--delete --bwlimit=10m` and should not overlap a Knots start.
 
 ### Windows restarts
 
@@ -99,7 +109,7 @@ Containers use `--restart unless-stopped`, but nothing brought back Docker Deskt
 
 ## Remaining steps
 
-1. Forward leg reaches the Knots tip.
+1. ~~Forward leg reaches the Knots tip.~~ Done 2026-10-12.
 2. Freeze a baseline: stop the StartOS Fulcrum package, record its tip, copy its datadir with [`scripts/neop-rsync`](../../scripts/neop-rsync), and start it again.
 3. Stop the round-trip index at the baseline tip. If it overshot, rewind it there with stored undo.
 4. Compare the two indexes offline (per column family digest), then record the result here.

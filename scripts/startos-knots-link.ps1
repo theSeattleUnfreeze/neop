@@ -33,6 +33,7 @@ param(
     [int] $ProbeSeconds = 30,
     [int] $FailThreshold = 4,
     [int] $ProbeTimeoutSeconds = 60,
+    [int] $RemoteTimeoutSeconds = 120,
     [string] $Log = (Join-Path $env:TEMP "startos-knots-link.log")
 )
 $ErrorActionPreference = "Continue"
@@ -73,10 +74,31 @@ function Test-Rpc {
     }
 }
 
+function Invoke-Bounded([string] $exe, [string[]] $argv) {
+    # A wedged StartOS can accept the SSH login yet never run the command; ConnectTimeout and
+    # ServerAlive do not catch that, so enforce a wall-clock limit or the watchdog stalls with it.
+    $psi = New-Object System.Diagnostics.ProcessStartInfo $exe
+    $psi.Arguments = ($argv | ForEach-Object { '"' + ($_ -replace '"', '\"') + '"' }) -join ' '
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $p.StandardInput.Close()
+    $so = $p.StandardOutput.ReadToEndAsync()
+    $se = $p.StandardError.ReadToEndAsync()
+    if (-not $p.WaitForExit($RemoteTimeoutSeconds * 1000)) {
+        try { $p.Kill() } catch { }
+        return @{ Code = -1; Out = "$exe timed out after ${RemoteTimeoutSeconds}s" }
+    }
+    $p.WaitForExit()
+    return @{ Code = $p.ExitCode; Out = ($so.Result + $se.Result).Trim() }
+}
+
 function Remote([string] $cmd) {
     # -n: without a console, ssh otherwise waits on stdin and never returns.
-    $out = & ssh -n @sshOpts $target $cmd 2>&1
-    return @{ Code = $LASTEXITCODE; Out = ($out | Out-String).Trim() }
+    return Invoke-Bounded "ssh" (@("-n") + $sshOpts + @($target, $cmd))
 }
 
 function Repair-Proxy {
@@ -89,8 +111,8 @@ function Repair-Proxy {
            elseif ($remoteHash -ne $localHash) { "proxy script is stale" }
            else { "proxy listening but RPC failing" }
     Note "repair: $why; redeploying proxy"
-    & scp @sshOpts $ProxyScript "${target}:$RemoteProxyPath" 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { Note "repair: upload failed"; return }
+    $up = Invoke-Bounded "scp" ($sshOpts + @($ProxyScript, "${target}:$RemoteProxyPath"))
+    if ($up.Code -ne 0) { Note "repair: upload failed ($($up.Out))"; return }
     # Anchored so pkill matches only the proxy, not the remote shell running this command line.
     $start = Remote ("sudo pkill -f '^python3 $RemoteProxyPath' ; sleep 1; " +
         "sudo sh -c 'nohup python3 $RemoteProxyPath >/tmp/rpc-auth-proxy.log 2>&1 &'; sleep 2; " +
