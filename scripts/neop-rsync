@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Copy a remote path into a local dest with resume + no-clobber.
+# Usage:
+#   scripts/neop-rsync --ssh user@host --src /remote/path --dest /local/path
+#   scripts/neop-rsync --ssh user@host --src /remote/path --dest /local/path --dry-run
+#   scripts/neop-rsync --ssh user@SSH_HOST --startos-package fulcrum \
+#     --identity ~/.ssh/id_startos --src /remote/fulcrum/data/main/ --dest /local/path
+#
+# --startos-package ID stops that StartOS service before the copy and starts it
+# again afterward, including when rsync fails. --dry-run does not stop the service.
+# StartOS package volumes are root-owned, so the default remote rsync is "sudo rsync".
+set -euo pipefail
+
+SSH_TARGET=""
+IDENTITY=""
+SRC=""
+DEST=""
+DRY_RUN=0
+STARTOS_PACKAGE=""
+RSYNC_PATH=""
+DID_STOP=0
+
+usage() {
+  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+  exit 2
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --ssh) SSH_TARGET="${2:-}"; shift 2 ;;
+    --identity|-i) IDENTITY="${2:-}"; shift 2 ;;
+    --src) SRC="${2:-}"; shift 2 ;;
+    --dest) DEST="${2:-}"; shift 2 ;;
+    --startos-package) STARTOS_PACKAGE="${2:-}"; shift 2 ;;
+    --rsync-path) RSYNC_PATH="${2:-}"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    -h|--help) usage ;;
+    *) echo "unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+[[ -n "$SSH_TARGET" && -n "$SRC" && -n "$DEST" ]] || usage
+
+if [[ -n "$STARTOS_PACKAGE" && ! "$STARTOS_PACKAGE" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]]; then
+  echo "invalid --startos-package id: $STARTOS_PACKAGE" >&2
+  exit 2
+fi
+
+if ! command -v rsync >/dev/null 2>&1; then
+  echo "rsync not found" >&2
+  exit 1
+fi
+if ! command -v ssh >/dev/null 2>&1; then
+  echo "ssh not found" >&2
+  exit 1
+fi
+
+SSH_OPTS=(
+  -o BatchMode=yes
+  -o IdentitiesOnly=yes
+  -o ConnectTimeout=15
+  -o ServerAliveInterval=30
+  -o ServerAliveCountMax=120
+)
+if [[ -n "$IDENTITY" ]]; then
+  SSH_OPTS+=(-i "$IDENTITY")
+fi
+
+ssh_cmd() {
+  ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "$@"
+}
+
+cleanup() {
+  local rc=$?
+  if [[ "$DID_STOP" -eq 1 ]]; then
+    echo "starting StartOS package $STARTOS_PACKAGE on $SSH_TARGET"
+    if ! ssh_cmd "start-cli package start $(printf '%q' "$STARTOS_PACKAGE")"; then
+      echo "failed to restart StartOS package $STARTOS_PACKAGE" >&2
+      if [[ "$rc" -eq 0 ]]; then
+        rc=1
+      fi
+    fi
+  fi
+  exit "$rc"
+}
+
+# Trailing slash on dest copies the contents of src into dest.
+mkdir -p "$DEST"
+
+# Refuse to clobber a non-empty dest unless it is a resume of this same source.
+MARKER="$DEST/.neop-rsync-source"
+EXPECTED="${SSH_TARGET}:${SRC}"
+if [[ -d "$DEST" ]] && [[ -n "$(find "$DEST" -mindepth 1 -maxdepth 1 ! -name '.neop-rsync-source' -print -quit)" ]]; then
+  if [[ ! -f "$MARKER" ]] || [[ "$(cat "$MARKER")" != "$EXPECTED" ]]; then
+    echo "refusing to clobber non-empty dest $DEST (no matching .neop-rsync-source marker)" >&2
+    echo "expected marker contents: $EXPECTED" >&2
+    exit 1
+  fi
+fi
+
+if [[ -n "$STARTOS_PACKAGE" && -z "$RSYNC_PATH" ]]; then
+  RSYNC_PATH="sudo rsync"
+fi
+
+RSYNC_OPTS=(-aH --partial --info=progress2)
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  RSYNC_OPTS+=(--dry-run)
+fi
+if [[ -n "$RSYNC_PATH" ]]; then
+  RSYNC_OPTS+=(--rsync-path="$RSYNC_PATH")
+fi
+
+if [[ -n "$STARTOS_PACKAGE" && "$DRY_RUN" -eq 0 ]]; then
+  trap cleanup EXIT
+  DID_STOP=1
+  echo "stopping StartOS package $STARTOS_PACKAGE on $SSH_TARGET"
+  ssh_cmd "start-cli package stop $(printf '%q' "$STARTOS_PACKAGE")"
+  unlocked=0
+  for _ in $(seq 1 30); do
+    if ssh_cmd "sudo fuser -s $(printf '%q' "$SRC")"; then
+      sleep 1
+    else
+      unlocked=1
+      break
+    fi
+  done
+  if [[ "$unlocked" -ne 1 ]]; then
+    echo "source still busy after stopping $STARTOS_PACKAGE: $SRC" >&2
+    exit 1
+  fi
+fi
+
+echo "$EXPECTED" > "$MARKER"
+echo "rsync ${SSH_TARGET}:${SRC} -> ${DEST}"
+rsync "${RSYNC_OPTS[@]}" -e "ssh ${SSH_OPTS[*]}" "${SSH_TARGET}:${SRC}" "$DEST/"
