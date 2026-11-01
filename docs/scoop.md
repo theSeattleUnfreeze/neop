@@ -35,12 +35,17 @@ Colors: Core = chocolate brown; Knots = pink; Both = cream (contrast adjusts for
 
 ## Status
 
-Theme, schema, Electrum sync helpers, API routes, and Neapolitan / Flavor / Spills UI are in `scoop/`.
-Optional Docker profile lands in a follow-up (`docker-compose.scoop.yml`).
+Theme, schema, Electrum sync, API routes, and Neapolitan / Flavor / Spills UI ship under `scoop/`.
 
 ```bash
 cd scoop && cp .env.example .env && npm install && npm test && npm run dev
 # http://127.0.0.1:3847
+```
+
+Optional Docker (Postgres + Scoop; Electrum on the host):
+
+```bash
+docker compose -f docker-compose.scoop.yml --profile scoop up --build
 ```
 
 Requires reachable Fulcrum (`FULCRUM_URL`) and Shulcrum (`SHULCRUM_URL`). Postgres is optional for ephemeral scripthash sync.
