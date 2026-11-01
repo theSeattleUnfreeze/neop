@@ -63,7 +63,7 @@ neop does **not** own Electrum ports. **Fulcrum** (`:15001` on testnet4) and **S
 
 ## Ceremony without waiting on Electrum
 
-Core-bound OP_RETURN protection can use Core RPC + Sparrow before Electrum finishes indexing. See [replay.md](replay.md) and `python -m neop_cli protect-psbt`.
+Core-bound OP_RETURN **garnish** (RDTS-window) can use Core RPC + Sparrow before Electrum finishes indexing. Prefer Knots-first + taint for lasting Core-only coins — see [replay.md](replay.md) and `python -m neop_cli protect-psbt`.
 
 ## Honest constraints
 
