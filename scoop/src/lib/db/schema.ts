@@ -180,6 +180,7 @@ export const scriptTipState = pgTable(
     outpointTxid: text("outpoint_txid").notNull(),
     outpointVout: integer("outpoint_vout").notNull(),
     status: tipStateStatusEnum("status").notNull(),
+    valueSats: bigint("value_sats", { mode: "bigint" }),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

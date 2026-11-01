@@ -52,6 +52,12 @@ export async function POST(req: Request) {
   const db = createDb();
 
   let watchAccountId = body.watchAccountId ?? null;
+  if (source === "electrum" && !watchAccountId && !body.scripts?.length) {
+    return NextResponse.json(
+      { error: "electrum account requires at least one scripthash" },
+      { status: 400 }
+    );
+  }
   if (source === "electrum" && !watchAccountId && body.scripts?.length) {
     const scripts = body.scripts.map((s) => ({
       ...s,
