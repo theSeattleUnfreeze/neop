@@ -1,11 +1,5 @@
-import { CatalogClient } from "@/components/CatalogClient";
+import { redirect } from "next/navigation";
 
-export default function KnotsFlavorPage() {
-  return (
-    <CatalogClient
-      mode="knots"
-      title="Knots flavor"
-      blurb="UTXOs present on the Knots tip (including the Knots side of both)."
-    />
-  );
+export default function KnotsFlavorRedirect() {
+  redirect("/wallets");
 }

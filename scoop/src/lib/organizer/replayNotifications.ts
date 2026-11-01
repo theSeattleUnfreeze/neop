@@ -11,7 +11,7 @@ import {
   type PriorTipOutpoint,
 } from "@/lib/catalog/replayReceive";
 import type { UnspentItem } from "@/lib/sync/fetchTip";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 export type ReplaySyncInput = {
   db: ScoopDb;
@@ -32,6 +32,29 @@ export type ReplaySyncResult = {
     body: string;
   }[];
 };
+
+/** Replace stored unspent outpoints for one tip. Leaves the other tip's rows intact. */
+export async function replaceTipUnspent(
+  db: ScoopDb,
+  scriptId: number,
+  tip: "core" | "knots",
+  unspent: UnspentItem[]
+): Promise<void> {
+  await db
+    .delete(scriptTipState)
+    .where(and(eq(scriptTipState.scriptId, scriptId), eq(scriptTipState.tip, tip)));
+  if (!unspent.length) return;
+  await db.insert(scriptTipState).values(
+    unspent.map((u) => ({
+      scriptId,
+      tip,
+      outpointTxid: u.tx_hash.toLowerCase(),
+      outpointVout: u.tx_pos,
+      status: "unspent" as const,
+      valueSats: BigInt(u.value),
+    }))
+  );
+}
 
 /**
  * Detect replay receives, persist new notifications + auto tasks, refresh tip state.
@@ -119,29 +142,8 @@ export async function applyReplayReceiveSync(
     }
   }
 
-  // Refresh tip state for this script from current unspent sets
-  await db.delete(scriptTipState).where(eq(scriptTipState.scriptId, scriptId));
-  const tipRows = [
-    ...input.coreUnspent.map((u) => ({
-      scriptId,
-      tip: "core" as const,
-      outpointTxid: u.tx_hash.toLowerCase(),
-      outpointVout: u.tx_pos,
-      status: "unspent" as const,
-      valueSats: BigInt(u.value),
-    })),
-    ...input.knotsUnspent.map((u) => ({
-      scriptId,
-      tip: "knots" as const,
-      outpointTxid: u.tx_hash.toLowerCase(),
-      outpointVout: u.tx_pos,
-      status: "unspent" as const,
-      valueSats: BigInt(u.value),
-    })),
-  ];
-  if (tipRows.length) {
-    await db.insert(scriptTipState).values(tipRows);
-  }
+  await replaceTipUnspent(db, scriptId, "core", input.coreUnspent);
+  await replaceTipUnspent(db, scriptId, "knots", input.knotsUnspent);
 
   return { hits, newNotifications };
 }

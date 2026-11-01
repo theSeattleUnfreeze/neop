@@ -33,6 +33,12 @@ Electrum clients verify header PoW themselves. Stock Sparrow expects **80-byte S
 3. In Shrike: private Electrum → Shulcrum host/`15011`.
 4. Confirm tip/height in each app before sending.
 
+### Electrum / xpub for Scoop
+
+Scoop Electrum-linked **wallets** prefer a Sparrow **account xpub** (auto-expands receive
+addresses). Advanced: paste one Bitcoin address. See
+[scoop.md — Linking a Sparrow wallet](scoop.md#linking-a-sparrow-or-shrike-wallet).
+
 Print host/port hints: `python -m neop_cli electrum-endpoints`.
 
 ## Related

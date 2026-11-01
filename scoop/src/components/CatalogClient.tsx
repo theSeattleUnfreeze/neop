@@ -21,16 +21,13 @@ export function CatalogClient({ mode, title, blurb }: Props) {
   }>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scripthash, setScripthash] = useState("");
   const [address, setAddress] = useState("");
 
   const sync = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      const scripts = scripthash.trim()
-        ? [{ scripthash: scripthash.trim(), address: address.trim() || undefined }]
-        : [];
+      const scripts = address.trim() ? [{ address: address.trim() }] : [];
       const syncRes = await fetch("/api/sync", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -54,7 +51,7 @@ export function CatalogClient({ mode, title, blurb }: Props) {
     } finally {
       setBusy(false);
     }
-  }, [address, mode, scripthash]);
+  }, [address, mode]);
 
   return (
     <div className="scoop-stack">
@@ -71,24 +68,15 @@ export function CatalogClient({ mode, title, blurb }: Props) {
       <section className="scoop-panel">
         <h3>Watch / sync</h3>
         <p className="muted">
-          Paste an Electrum scripthash (64 hex). Optional address label. Leave empty to sync DB
-          watches when Postgres is configured.
+          Paste a Bitcoin address to probe both tips. Leave empty to sync every address from your
+          wallets (when Postgres is configured). A 64-hex Electrum scripthash still works.
         </p>
         <label className="field">
-          <span>Scripthash</span>
-          <input
-            value={scripthash}
-            onChange={(e) => setScripthash(e.target.value)}
-            placeholder="64 hex chars"
-            spellCheck={false}
-          />
-        </label>
-        <label className="field">
-          <span>Address (label)</span>
+          <span>Address</span>
           <input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            placeholder="bc1q…"
+            placeholder="bc1q…  (or 64-hex scripthash)"
             spellCheck={false}
           />
         </label>

@@ -26,7 +26,7 @@ function fmtSats(s: string) {
 
 export function AccountCard(props: Props) {
   return (
-    <Link href={`/accounts/${props.id}`} className="account-card">
+    <Link href={`/wallets/${props.id}`} className="account-card">
       <div className="account-card-top">
         <h3>{props.label}</h3>
         <span className={`source-pill ${props.source}`}>{props.source}</span>

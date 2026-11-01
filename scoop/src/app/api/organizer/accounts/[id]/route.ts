@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { serializeBigints, parseSatsInput } from "@/lib/catalog/balances";
+import { serializeBigints, parseSatsInput, type AnnotatedRow } from "@/lib/catalog/balances";
 
 export const runtime = "nodejs";
 
@@ -33,13 +33,36 @@ export async function GET(_req: Request, ctx: Ctx) {
     .limit(1);
   if (!account) return NextResponse.json({ error: "not found" }, { status: 404 });
   let scripts: unknown[] = [];
+  let rows: AnnotatedRow[] = [];
+  let balance = null;
   if (account.watchAccountId) {
     scripts = await db
       .select()
       .from(watchedScripts)
       .where(eq(watchedScripts.accountId, account.watchAccountId));
+    const { loadOrganizerRowsFromTipState } = await import("@/lib/organizer/tipStateRows");
+    const { aggregateAccountBalances } = await import("@/lib/catalog/balances");
+    const tipRows = await loadOrganizerRowsFromTipState(db, [account.watchAccountId]);
+    rows = tipRows;
+    balance = aggregateAccountBalances(
+      [
+        {
+          id: account.id,
+          source: account.source,
+          watchAccountId: account.watchAccountId,
+          manualCoreSats: account.manualCoreSats,
+          manualKnotsSats: account.manualKnotsSats,
+        },
+      ],
+      tipRows
+    )[0];
   }
-  return NextResponse.json({ account: serializeBigints(account), scripts });
+  return NextResponse.json({
+    account: serializeBigints(account),
+    scripts,
+    rows: serializeBigints(rows),
+    balance: serializeBigints(balance),
+  });
 }
 
 type PatchBody = {

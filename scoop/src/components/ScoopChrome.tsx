@@ -3,9 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  AlertTriangle,
-  Candy,
-  Cherry,
   ClipboardList,
   IceCreamCone,
   LayoutDashboard,
@@ -15,12 +12,8 @@ import { ThemeToggle } from "./ThemeToggle";
 
 const NAV = [
   { href: "/", label: "Dashboard", Icon: LayoutDashboard, exact: true },
-  { href: "/accounts", label: "Accounts", Icon: Wallet },
+  { href: "/wallets", label: "Wallets", Icon: Wallet },
   { href: "/tasks", label: "Tasks", Icon: ClipboardList },
-  { href: "/catalog", label: "Neapolitan", Icon: IceCreamCone },
-  { href: "/catalog/flavor/core", label: "Core", Icon: Cherry },
-  { href: "/catalog/flavor/knots", label: "Knots", Icon: Candy },
-  { href: "/catalog/spills", label: "Spills", Icon: AlertTriangle },
 ];
 
 export function ScoopChrome({ children }: { children: React.ReactNode }) {

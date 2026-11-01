@@ -31,6 +31,16 @@ type Pending = {
 };
 
 /**
+ * StartOS Electrum uses a self-signed cert. Default: accept it.
+ * Set SCOOP_ELECTRUM_TLS_INSECURE=0 to require a CA-valid cert.
+ */
+export function electrumTlsRejectUnauthorized(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  return env.SCOOP_ELECTRUM_TLS_INSECURE === "0";
+}
+
+/**
  * Minimal Electrum JSON-RPC client (newline-delimited).
  * Used against Fulcrum (Core) and Shulcrum (Knots).
  */
@@ -59,8 +69,15 @@ export class ElectrumClient {
         socket.off("connect", onConnected);
         socket.off("secureConnect", onConnected);
       };
+      // StartOS (and similar) serve Electrum with a self-signed cert; Scoop is
+      // operator-localhost and talks only to configured Fulcrum/Shulcrum URLs.
       const socket = this.target.tls
-        ? tls.connect({ host: this.target.host, port: this.target.port, servername: this.target.host })
+        ? tls.connect({
+            host: this.target.host,
+            port: this.target.port,
+            servername: this.target.host,
+            rejectUnauthorized: electrumTlsRejectUnauthorized(),
+          })
         : net.connect({ host: this.target.host, port: this.target.port });
       this.socket = socket;
       socket.setEncoding("utf8");

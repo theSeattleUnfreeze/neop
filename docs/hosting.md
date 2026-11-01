@@ -6,7 +6,8 @@ Primary runtime is **Linux**. Thin macOS hosts run neop via Colima/VM; datadir m
 |------|------|
 | **Linux x86_64** | Primary supported runtime for `neopd` + compose |
 | **MacBook (macOS 12.7.6 Monterey) + USB HDD** | Personal host: datadir on USB; **runtime = Linux via Colima/VM** (Monterey is thin). On-demand uptime OK. |
-| **StartOS (Knots + CLN)** | Always-on SHA-256 peer / IBD / LN only — **not** the Blake2b / `neopd` host |
+| **StartOS (Knots + CLN + Fulcrum)** | Always-on Knots tip / LN / Electrum peer. Scoop and wallets on another host use StartOS **Interfaces** URLs (Bitcoin RPC LAN often **`:57747`**; Fulcrum Electrum **SSL** is a **dynamic** port — copy `ssl://…`). Prefer LAN IP if `*.local` mDNS fails. Not the dual-flavor `neopd` host. |
+| **Umbrel** | Same idea as StartOS for a packaged node + Electrum: copy addresses from the app UI into Scoop `FULCRUM_URL` / `SHULCRUM_URL`. |
 | **Windows dual-boot Linux** | testnet4 scratch only — not primary mainnet archive |
 
 ## Profiles
@@ -22,11 +23,17 @@ Primary runtime is **Linux**. Thin macOS hosts run neop via Colima/VM; datadir m
 - Start a Linux VM (Colima or equivalent); mount the USB volume into the VM for `./data/…`.
 - RPC binds to localhost on the VM; expose to the Mac only if you understand the trust boundary.
 
-### StartOS (peer-only)
+### StartOS (Knots tip + Electrum)
 
-- Use for SHA-256 IBD / peering and Lightning — not as the dual-flavor wallet host.
-- Wallet non-legacy tip tracks **Blake2b Knots**, not a stalled RDTS SHA-256 flavor switch on StartOS.
+- Run Blake2b **Knots** + **Fulcrum** (e.g. privkeyio fulcrum-startos) on StartOS for the Knots tip.
+- Scoop / Sparrow / Shrike on another machine: open Fulcrum → **Interfaces** → **Electrum (SSL)**, copy the `ssl://` URL. Ports are **assigned by StartOS** (not fixed `50002`). Bitcoin Knots RPC on LAN is commonly **`57747`**.
+- If `something.local` does not resolve, use the StartOS LAN IP.
+- Self-hosted Linux Fulcrum still defaults to **50001** (tcp) / **50002** (ssl) — see [electrum.md](electrum.md).
+- Dual-flavor `neopd` + shared archive still belongs on a Linux neop host ([deploy-metal.md](deploy-metal.md)), not inside StartOS.
 
+### Umbrel
+
+- Point Scoop at the Electrum / Fulcrum addresses Umbrel shows in its UI (LAN or Tor). Same env vars as StartOS.
 ## Disk layout (conceptual)
 
 ```

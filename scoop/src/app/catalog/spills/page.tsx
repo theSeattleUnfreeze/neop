@@ -1,11 +1,5 @@
-import { CatalogClient } from "@/components/CatalogClient";
+import { redirect } from "next/navigation";
 
-export default function SpillsPage() {
-  return (
-    <CatalogClient
-      mode="spills"
-      title="Spills"
-      blurb="Likely replays: spent on both Core and Knots. Alarm if you expected a Core-only ceremony to leave Knots unspent."
-    />
-  );
+export default function SpillsRedirect() {
+  redirect("/wallets");
 }
