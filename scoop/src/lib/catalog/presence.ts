@@ -11,7 +11,8 @@ export type TipView = {
   status: UtxoStatus | "absent";
   txid?: string;
   vout?: number;
-  valueSats?: bigint;
+  /** Satoshis from Electrum listunspent (number for JSON-safe API responses). */
+  valueSats?: number;
   spendTxid?: string;
 };
 
