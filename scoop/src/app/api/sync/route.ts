@@ -20,7 +20,14 @@ export async function POST(req: Request) {
     shulcrumError: urls.shulcrum ? null : "SHULCRUM_URL unset",
   };
 
-  let scripts = body.scripts ?? [];
+  type ScriptIn = {
+    id?: number;
+    scripthash: string;
+    address?: string;
+    accountId?: number;
+    watchAccountId?: number;
+  };
+  let scripts: ScriptIn[] = (body.scripts ?? []) as ScriptIn[];
   if (scripts.length) {
     try {
       scripts = scripts.map((s) => ({
@@ -36,11 +43,13 @@ export async function POST(req: Request) {
     const { createDb } = await import("@/lib/db/client");
     const { watchedScripts } = await import("@/lib/db/schema");
     const db = createDb();
-    const rows = await db.select().from(watchedScripts);
-    scripts = rows.map((r) => ({
+    const dbRows = await db.select().from(watchedScripts);
+    scripts = dbRows.map((r) => ({
       id: r.id,
       scripthash: r.electrumScripthash,
       address: r.address ?? undefined,
+      accountId: r.accountId,
+      watchAccountId: r.accountId,
     }));
   }
 
@@ -53,7 +62,10 @@ export async function POST(req: Request) {
       ? await fetchScriptTip("knots", urls.shulcrum, s.scripthash)
       : undefined;
     rows.push(
-      coinRowFromTips(s.id ?? 0, s.address, core, knots)
+      coinRowFromTips(s.id ?? 0, s.address, core, knots, {
+        accountId: s.accountId ?? null,
+        watchAccountId: s.watchAccountId ?? s.accountId ?? null,
+      })
     );
     if (core && !core.ok) health.fulcrumError = core.error ?? "fulcrum error";
     if (knots && !knots.ok) health.shulcrumError = knots.error ?? "shulcrum error";
