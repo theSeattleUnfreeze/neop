@@ -60,7 +60,7 @@ See [`scoop/.env.example`](../scoop/.env.example):
 |----------|---------|
 | `SCOOP_DATABASE_URL` | Postgres (required for dashboard / wallets / tasks / notifications) |
 | `FULCRUM_URL` | Core Electrum (`tcp://` or `ssl://`) |
-| `SHULCRUM_URL` | Knots Electrum — Blake2b Fulcrum or Shulcrum (`tcp://` or `ssl://`) |
+| `SHULCRUM_URL` | Knots Electrum — pin [privkeyio Fulcrum v2.1.2-blake-3](https://github.com/privkeyio/Fulcrum/releases/tag/v2.1.2-blake-3) or Shulcrum (`tcp://` or `ssl://`) |
 | `SCOOP_BIND` | Host/port for the Next server |
 | `SCOOP_ELECTRUM_TLS_INSECURE` | `1` (default in compose) to accept StartOS self-signed Electrum TLS; `0` to verify CA |
 

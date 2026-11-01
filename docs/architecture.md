@@ -32,11 +32,11 @@ clobber real files) is a **one-shot script**, not `neopd`: see
 
 Knots marked light clients out of scope. Upstream Fulcrum rejected Blake2b headers ([cculianu/Fulcrum#327](https://github.com/cculianu/Fulcrum/issues/327)).
 
-**Core:** [Fulcrum](https://github.com/cculianu/Fulcrum) only — do not recommend electrs. **Knots:** vendor/run [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) — variable header length + `blockchain.pow_algorithms` / protocol 1.7. Design notes: [Kilombino/blake2b-light-clients](https://github.com/Kilombino/blake2b-light-clients).
+**Core:** [Fulcrum](https://github.com/cculianu/Fulcrum) only — do not recommend electrs. **Knots:** pin [privkeyio/Fulcrum v2.1.2-blake-3](https://github.com/privkeyio/Fulcrum/releases/tag/v2.1.2-blake-3) (variable headers, protocol ≤1.6); [Kilombino/Shulcrum](https://github.com/Kilombino/Shulcrum) remains the alternative for protocol 1.7 / `blockchain.pow_algorithms`. Design notes: [Kilombino/blake2b-light-clients](https://github.com/Kilombino/blake2b-light-clients).
 
-Wallets: Sparrow → Fulcrum; Shrike → Shulcrum ([wallets.md](wallets.md)). Ops: [electrum.md](electrum.md). Metal import: [deploy-metal.md](deploy-metal.md).
+Wallets: Sparrow → Core Fulcrum; Shrike → Knots Electrum (privkeyio Fulcrum or Shulcrum) ([wallets.md](wallets.md)). Ops: [electrum.md](electrum.md). Metal import: [deploy-metal.md](deploy-metal.md).
 
-Do **not** fork Blake2b hashing into neop. Testnet4 Electrum ports: `15001` (Core/Fulcrum), `15011` (Knots/Shulcrum).
+Do **not** fork Blake2b hashing into neop. Testnet4 Electrum ports: `15001` (Core/Fulcrum), `15011` (Knots Electrum).
 
 ## Replay ethos (product core)
 
