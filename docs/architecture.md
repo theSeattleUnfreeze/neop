@@ -57,10 +57,6 @@ Never silent dual-broadcast. Never claim PoW alone stops replays. Lightning chan
 
 **Scoop** is a separate read-only Next.js catalog UI (`scoop/`) that watches Fulcrum and Shulcrum, labels Core / Knots / both presence, and surfaces likely Spills. It does not sign or replace wallet apps. See [docs/scoop.md](scoop.md).
 
-## Scoop (optional)
-
-**Scoop** is a separate read-only Next.js catalog UI (`scoop/`) that watches Fulcrum and Shulcrum, labels Core / Knots / both presence, and surfaces likely Spills. It does not sign or replace wallet apps. See [docs/scoop.md](scoop.md).
-
 ## Out of scope for v1
 
 - Profitable Blake2b mining / DATUM ops
