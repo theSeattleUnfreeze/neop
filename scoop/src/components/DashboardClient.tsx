@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell, RefreshCw } from "lucide-react";
 import { AccountCard } from "@/components/AccountCard";
+import { StackStatus } from "@/components/StackStatus";
 
 type Card = {
   account: {
@@ -124,6 +125,7 @@ export function DashboardClient() {
 
   return (
     <div className="scoop-stack">
+      <StackStatus />
       <section className="scoop-panel dash-hero">
         <div className="dash-hero-row">
           <div>

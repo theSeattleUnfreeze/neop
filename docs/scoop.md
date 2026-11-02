@@ -63,6 +63,9 @@ See [`scoop/.env.example`](../scoop/.env.example):
 | `SHULCRUM_URL` | Knots Electrum — pin [privkeyio Fulcrum v2.1.2-blake-3](https://github.com/privkeyio/Fulcrum/releases/tag/v2.1.2-blake-3) or Shulcrum (`tcp://` or `ssl://`) |
 | `SCOOP_BIND` | Host/port for the Next server |
 | `SCOOP_ELECTRUM_TLS_INSECURE` | `1` (default in compose) to accept StartOS self-signed Electrum TLS; `0` to verify CA |
+| `SCOOP_STACK_CONFIG` | Optional path to `stack.json` (default `~/.neop/stack.json`). The dashboard probes these endpoints |
+| `CORE_RPC_URL` / `CORE_COOKIE` | Core node RPC and cookie file, used when `stack.json` is absent |
+| `KNOTS_RPC_URL` | Knots RPC through the local tunnel, when one is configured |
 
 ### StartOS / Umbrel / Linux examples
 
@@ -79,6 +82,12 @@ SCOOP_ELECTRUM_TLS_INSECURE=1
 # Umbrel — paste host/port from the Fulcrum / Electrum app UI
 ```
 
+## Stack status
+
+The dashboard probes Core RPC, Core Fulcrum, Knots Fulcrum, and the Knots RPC tunnel. A catalog is ready when both Electrum servers answer and their tips are within a few blocks. Paths and start/stop live on **Stack** (`/stack`), which reads `SCOOP_STACK_CONFIG`.
+
+Knots on StartOS is observed from here. Scoop does not stop that host.
+
 ## Linking a Sparrow (or Shrike) wallet
 
 A **wallet** in Scoop is an xpub plus derivation path (a collection of addresses). An
@@ -89,6 +98,8 @@ addresses on both tips.
 
 1. In **Sparrow** / **Shrike**: open the wallet → copy the **account Extended Public Key**
    (Settings / wallet settings → Copy Extended Public Key — `zpub` / `ypub` / `xpub`).
+   Or, in Scoop, choose **Sparrow wallet file** and pick the wallet file. An encrypted file
+   needs the Sparrow password. Scoop keeps the account xpub and drops the seed.
 2. Scoop → **Wallets** → **+ Add a wallet** (the form is already open if you have none yet).
 3. Choose **Entire wallet**, paste the xpub, then Next. Derivation path is optional.
 4. Scoop checks the first **50** receive addresses. If none have history, it asks you to raise

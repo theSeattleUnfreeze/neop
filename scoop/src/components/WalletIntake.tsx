@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   addressError,
   derivationPathError,
@@ -15,6 +15,15 @@ import {
 import { DEFAULT_GAP_LIMIT } from "@/lib/electrum/gap";
 
 type Step = "kind" | "label" | "xpub" | "address" | "manual" | "review";
+
+function bytesToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
 
 type Preview = {
   emptyWatch: boolean;
@@ -66,6 +75,12 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [sparrowPassword, setSparrowPassword] = useState("");
+  const [sparrowNote, setSparrowNote] = useState("");
+  const [sparrowChoices, setSparrowChoices] = useState<
+    { label: string; xpub: string; derivationPath: string }[]
+  >([]);
+  const sparrowFile = useRef("");
 
   const mark = (key: string) => setTouched((t) => ({ ...t, [key]: true }));
   const bind = (key: string, setter: (value: string) => void) => ({
@@ -98,6 +113,10 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     setPreview(null);
     setPreviewing(false);
     setTouched({});
+    setSparrowPassword("");
+    setSparrowNote("");
+    setSparrowChoices([]);
+    sparrowFile.current = "";
   }, []);
 
   useEffect(() => {
@@ -219,6 +238,44 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     // Gap edits on the empty-watch prompt use Check again, not this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, step, kind]);
+
+  const inspectSparrow = async (fileBase64: string, password: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sparrow/inspect", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fileBase64, password: password || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "could not read that wallet file");
+      const accounts = (json.accounts ?? []) as {
+        label: string;
+        xpub: string;
+        derivationPath: string;
+      }[];
+      setSparrowNote(typeof json.note === "string" ? json.note : "");
+      setSparrowChoices(accounts);
+      const first = accounts[0];
+      if (first) {
+        setXpub(first.xpub);
+        if (first.derivationPath) setDerivationPath(first.derivationPath);
+        setLabel((current) => current.trim() || json.name || current);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSparrowFile = async (file: File | undefined) => {
+    if (!file) return;
+    const buf = await file.arrayBuffer();
+    sparrowFile.current = bytesToBase64(buf);
+    await inspectSparrow(sparrowFile.current, sparrowPassword);
+  };
 
   const create = async () => {
     if (!canProceed) return;
@@ -342,6 +399,59 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
 
         {step === "xpub" ? (
           <>
+            <label className="field">
+              <span>Sparrow wallet file</span>
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={(e) => void onSparrowFile(e.target.files?.[0])}
+              />
+              <span className="muted">
+                Unencrypted JSON, or an encrypted Sparrow file plus its password. The seed stays
+                out of Scoop.
+              </span>
+            </label>
+            <label className="field">
+              <span>
+                Wallet password <Optional />
+              </span>
+              <input
+                type="password"
+                value={sparrowPassword}
+                autoComplete="off"
+                onChange={(e) => setSparrowPassword(e.target.value)}
+              />
+              {sparrowFile.current ? (
+                <button
+                  type="button"
+                  className="scoop-btn ghost"
+                  onClick={() => void inspectSparrow(sparrowFile.current, sparrowPassword)}
+                >
+                  Open file
+                </button>
+              ) : null}
+            </label>
+            {sparrowNote ? <p className="banner warn">{sparrowNote}</p> : null}
+            {sparrowChoices.length > 1 ? (
+              <label className="field">
+                <span>Which key to watch</span>
+                <select
+                  value={xpub}
+                  onChange={(e) => {
+                    const picked = sparrowChoices.find((account) => account.xpub === e.target.value);
+                    if (!picked) return;
+                    setXpub(picked.xpub);
+                    if (picked.derivationPath) setDerivationPath(picked.derivationPath);
+                  }}
+                >
+                  {sparrowChoices.map((account) => (
+                    <option key={account.xpub} value={account.xpub}>
+                      {account.label || account.derivationPath || account.xpub.slice(0, 12)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="field">
               <span>Extended public key</span>
               <input

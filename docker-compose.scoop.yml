@@ -8,7 +8,9 @@ services:
       POSTGRES_USER: scoop
       POSTGRES_PASSWORD: scoop
       POSTGRES_DB: scoop
-    # No host port — Scoop reaches Postgres on the compose network only.
+    # Loopback only, so a host-run Scoop (needed for start/stop and Explorer) can migrate.
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - scoop-pg:/var/lib/postgresql/data
     healthcheck:

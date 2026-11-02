@@ -6,12 +6,14 @@ import {
   ClipboardList,
   IceCreamCone,
   LayoutDashboard,
+  Server,
   Wallet,
 } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 
 const NAV = [
   { href: "/", label: "Dashboard", Icon: LayoutDashboard, exact: true },
+  { href: "/stack", label: "Stack", Icon: Server },
   { href: "/wallets", label: "Wallets", Icon: Wallet },
   { href: "/tasks", label: "Tasks", Icon: ClipboardList },
 ];
@@ -29,7 +31,7 @@ export function ScoopChrome({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <p className="scoop-tagline">
-          Self-hosted read-only dual-tip catalog. No keys. No broadcast. Localhost by default.
+          Dual-tip catalog on localhost. No keys. The Stack page can start the local node and indexer.
         </p>
         <ThemeToggle />
       </header>
