@@ -80,6 +80,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
   const [sparrowChoices, setSparrowChoices] = useState<
     { label: string; xpub: string; derivationPath: string }[]
   >([]);
+  const [sparrowFileName, setSparrowFileName] = useState("");
   const sparrowFile = useRef("");
 
   const mark = (key: string) => setTouched((t) => ({ ...t, [key]: true }));
@@ -116,6 +117,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     setSparrowPassword("");
     setSparrowNote("");
     setSparrowChoices([]);
+    setSparrowFileName("");
     sparrowFile.current = "";
   }, []);
 
@@ -274,6 +276,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     if (!file) return;
     const buf = await file.arrayBuffer();
     sparrowFile.current = bytesToBase64(buf);
+    setSparrowFileName(file.name);
     await inspectSparrow(sparrowFile.current, sparrowPassword);
   };
 
@@ -401,14 +404,10 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
           <>
             <label className="field">
               <span>Sparrow wallet file</span>
-              <input
-                type="file"
-                accept=".json,application/json"
-                onChange={(e) => void onSparrowFile(e.target.files?.[0])}
-              />
+              <input type="file" onChange={(e) => void onSparrowFile(e.target.files?.[0])} />
               <span className="muted">
-                Unencrypted JSON, or an encrypted Sparrow file plus its password. The seed stays
-                out of Scoop.
+                Encrypted Sparrow files usually have no extension. The password opens the file in
+                memory. Scoop keeps the account xpub and drops the seed.
               </span>
             </label>
             <label className="field">
@@ -421,16 +420,15 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
                 autoComplete="off"
                 onChange={(e) => setSparrowPassword(e.target.value)}
               />
-              {sparrowFile.current ? (
-                <button
-                  type="button"
-                  className="scoop-btn ghost"
-                  onClick={() => void inspectSparrow(sparrowFile.current, sparrowPassword)}
-                >
-                  Open file
-                </button>
-              ) : null}
             </label>
+            <button
+              type="button"
+              className="scoop-btn ghost"
+              disabled={!sparrowFile.current || busy}
+              onClick={() => void inspectSparrow(sparrowFile.current, sparrowPassword)}
+            >
+              {sparrowFileName ? `Open ${sparrowFileName}` : "Open file"}
+            </button>
             {sparrowNote ? <p className="banner warn">{sparrowNote}</p> : null}
             {sparrowChoices.length > 1 ? (
               <label className="field">

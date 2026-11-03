@@ -290,7 +290,8 @@ a {
   justify-self: start;
 }
 
-.stack-state.is-unset {
+.stack-state.is-unset,
+.stack-state.is-checking {
   color: var(--scoop-muted);
 }
 

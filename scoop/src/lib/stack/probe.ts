@@ -1,5 +1,7 @@
 import fs from "node:fs";
-import { ElectrumClient } from "@/lib/electrum/client";
+import http from "node:http";
+import https from "node:https";
+import { ElectrumClient, electrumTlsRejectUnauthorized } from "@/lib/electrum/client";
 import type { StackConfig, StackService, StackStatusRow } from "@/lib/stack/types";
 import { summarizeStack } from "@/lib/stack/summarize";
 
@@ -20,52 +22,162 @@ async function readCookie(cookieFile: string): Promise<{ user: string; password:
   return { user: raw.slice(0, split), password: raw.slice(split + 1) };
 }
 
+type RpcBody = { result?: RpcInfo; error?: { message?: string } };
+
+export function rpcProbeFromHttp(
+  status: number,
+  body: RpcBody | null
+): Pick<StackStatusRow, "state" | "height" | "headers" | "detail"> {
+  if (status === 401) {
+    return {
+      state: "up",
+      height: null,
+      headers: null,
+      detail: "RPC is there; credentials were not accepted.",
+    };
+  }
+  if (status < 200 || status >= 300 || !body || body.error || !body.result) {
+    const message = body?.error?.message || `HTTP ${status}`;
+    return { state: "down", height: null, headers: null, detail: message };
+  }
+  const info = body.result;
+  const ibd = info.initialblockdownload ? " still syncing" : "";
+  const progress =
+    typeof info.verificationprogress === "number"
+      ? ` (${Math.min(100, info.verificationprogress * 100).toFixed(1)}%)`
+      : "";
+  return {
+    state: "up",
+    height: typeof info.blocks === "number" ? info.blocks : null,
+    headers: typeof info.headers === "number" ? info.headers : null,
+    detail: `RPC answering${ibd}${progress}`,
+  };
+}
+
+async function rpcAuthorization(svc: StackService): Promise<string | null> {
+  if (svc.rpcUser) {
+    return Buffer.from(`${svc.rpcUser}:${svc.rpcPassword}`).toString("base64");
+  }
+  const cookie = await readCookie(svc.cookieFile);
+  if (!cookie) return null;
+  return Buffer.from(`${cookie.user}:${cookie.password}`).toString("base64");
+}
+
+function postRpc(
+  url: string,
+  headers: Record<string, string>,
+  body: string
+): Promise<{ status: number; text: string; location: string }> {
+  return new Promise((resolve, reject) => {
+    const target = new URL(url);
+    const isHttps = target.protocol === "https:";
+    const req = (isHttps ? https : http).request(
+      {
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port || (isHttps ? 443 : 80),
+        path: `${target.pathname}${target.search}` || "/",
+        method: "POST",
+        headers: { ...headers, "content-length": Buffer.byteLength(body) },
+        rejectUnauthorized: electrumTlsRejectUnauthorized(),
+        timeout: PROBE_MS,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk) => chunks.push(chunk as Buffer));
+        res.on("end", () =>
+          resolve({
+            status: res.statusCode ?? 0,
+            text: Buffer.concat(chunks).toString("utf8"),
+            location: Array.isArray(res.headers.location)
+              ? (res.headers.location[0] ?? "")
+              : (res.headers.location ?? ""),
+          })
+        );
+      }
+    );
+    req.on("error", reject);
+    req.on("timeout", () => req.destroy(new Error("Timed out.")));
+    req.end(body);
+  });
+}
+
+function rpcFromResponse(res: { status: number; text: string }): Pick<
+  StackStatusRow,
+  "state" | "height" | "headers" | "detail"
+> {
+  if (res.status === 401) return rpcProbeFromHttp(401, null);
+  let parsed: RpcBody | null = null;
+  try {
+    parsed = JSON.parse(res.text) as RpcBody;
+  } catch {
+    parsed = null;
+  }
+  return rpcProbeFromHttp(res.status, parsed);
+}
+
 async function probeRpc(svc: StackService): Promise<Pick<StackStatusRow, "state" | "height" | "headers" | "detail">> {
   if (!svc.endpoint) {
     return { state: "unset", height: null, headers: null, detail: "No RPC URL yet." };
   }
-  const cookie = await readCookie(svc.cookieFile);
   const headers: Record<string, string> = { "content-type": "text/plain" };
-  if (cookie) {
-    headers.authorization = `Basic ${Buffer.from(`${cookie.user}:${cookie.password}`).toString("base64")}`;
+  const authorization = await rpcAuthorization(svc);
+  if (authorization) headers.authorization = `Basic ${authorization}`;
+  const body = JSON.stringify({
+    jsonrpc: "1.0",
+    id: "scoop",
+    method: "getblockchaininfo",
+    params: [],
+  });
+  const urls = [svc.endpoint];
+  if (svc.endpoint.startsWith("http://")) {
+    urls.push(`https://${svc.endpoint.slice("http://".length)}`);
   }
-  try {
-    const res = await fetch(svc.endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        jsonrpc: "1.0",
-        id: "scoop",
-        method: "getblockchaininfo",
-        params: [],
-      }),
-      signal: AbortSignal.timeout(PROBE_MS),
-    });
-    const body = (await res.json()) as { result?: RpcInfo; error?: { message?: string } };
-    if (!res.ok || body.error || !body.result) {
-      const message = body.error?.message || `HTTP ${res.status}`;
-      return { state: "down", height: null, headers: null, detail: message };
+  const settled = await new Promise<{
+    good: { status: number; text: string; location: string } | null;
+    redirect: { status: number; text: string; location: string } | null;
+    fallback: { status: number; text: string; location: string } | null;
+    error: string;
+  }>((resolve) => {
+    let pending = urls.length;
+    let redirect: { status: number; text: string; location: string } | null = null;
+    let fallback: { status: number; text: string; location: string } | null = null;
+    let error = "fetch failed";
+    const finish = () => resolve({ good: null, redirect, fallback, error });
+    for (const url of urls) {
+      postRpc(url, headers, body).then(
+        (res) => {
+          if (res.status === 401 || (res.status >= 200 && res.status < 300)) {
+            resolve({ good: res, redirect, fallback, error });
+            return;
+          }
+          if (res.status >= 300 && res.status < 400 && res.location) redirect = res;
+          else fallback = res;
+          pending -= 1;
+          if (pending === 0) finish();
+        },
+        (err: unknown) => {
+          error = err instanceof Error ? err.message : String(err);
+          pending -= 1;
+          if (pending === 0) finish();
+        }
+      );
     }
-    const info = body.result;
-    const ibd = info.initialblockdownload ? " still syncing" : "";
-    const progress =
-      typeof info.verificationprogress === "number"
-        ? ` (${Math.min(100, info.verificationprogress * 100).toFixed(1)}%)`
-        : "";
-    return {
-      state: "up",
-      height: typeof info.blocks === "number" ? info.blocks : null,
-      headers: typeof info.headers === "number" ? info.headers : null,
-      detail: `RPC answering${ibd}${progress}`,
-    };
-  } catch (err) {
-    return {
-      state: "down",
-      height: null,
-      headers: null,
-      detail: err instanceof Error ? err.message : String(err),
-    };
+  });
+  if (settled.good) return rpcFromResponse(settled.good);
+  if (settled.redirect?.location) {
+    try {
+      const followed = await postRpc(new URL(settled.redirect.location, svc.endpoint).toString(), headers, body);
+      if (followed.status === 401 || (followed.status >= 200 && followed.status < 300)) {
+        return rpcFromResponse(followed);
+      }
+    } catch {
+      // The redirect target failed; report the redirect below.
+    }
   }
+  if (settled.fallback) return rpcFromResponse(settled.fallback);
+  if (settled.redirect) return rpcFromResponse(settled.redirect);
+  return { state: "down", height: null, headers: null, detail: settled.error };
 }
 
 async function probeElectrum(
@@ -108,13 +220,39 @@ async function probeLink(
   return probeRpc(svc);
 }
 
+const TIMED_OUT: Pick<StackStatusRow, "state" | "height" | "headers" | "detail"> = {
+  state: "down",
+  height: null,
+  headers: null,
+  detail: "Timed out.",
+};
+
+function withDeadline<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      }
+    );
+  });
+}
+
 async function probeOne(svc: StackService): Promise<StackStatusRow> {
-  const probed =
+  const probed = await withDeadline(
     svc.id === "core-fulcrum" || svc.id === "knots-fulcrum"
-      ? await probeElectrum(svc)
+      ? probeElectrum(svc)
       : svc.id === "knots-link"
-        ? await probeLink(svc)
-        : await probeRpc(svc);
+        ? probeLink(svc)
+        : probeRpc(svc),
+    PROBE_MS,
+    TIMED_OUT
+  );
   return {
     id: svc.id,
     label: svc.label,

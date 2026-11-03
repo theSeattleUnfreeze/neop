@@ -80,6 +80,8 @@ function mergeService(base: StackService, raw: unknown): StackService {
     datadir: asString(rec.datadir),
     configFile: asString(rec.configFile),
     cookieFile: asString(rec.cookieFile),
+    rpcUser: asString(rec.rpcUser),
+    rpcPassword: asString(rec.rpcPassword),
     containerName: asString(rec.containerName),
     image: asString(rec.image),
     publish: asString(rec.publish),

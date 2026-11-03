@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { loadStackConfig, normalizeStackConfig, revealablePaths, saveStackConfig } from "./config.ts";
+import { rpcProbeFromHttp } from "./probe.ts";
 import { summarizeStack } from "./summarize.ts";
 import type { StackStatusRow } from "./types.ts";
 
@@ -45,6 +46,15 @@ describe("stack summary", () => {
     ]);
     assert.equal(summary.catalogReady, false);
     assert.match(summary.summary, /Core Fulcrum/);
+  });
+});
+
+describe("rpc probe", () => {
+  it("treats 401 as up without a height", () => {
+    const row = rpcProbeFromHttp(401, null);
+    assert.equal(row.state, "up");
+    assert.equal(row.height, null);
+    assert.match(row.detail, /credentials/);
   });
 });
 

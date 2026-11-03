@@ -5,7 +5,7 @@ import type { StackConfig, StackService, StackServiceId, StackStatusRow } from "
 
 const LOCAL = { "content-type": "application/json", "x-scoop-local": "1" };
 
-const FIELDS: Record<StackServiceId, { key: keyof StackService; label: string; reveal?: boolean }[]> = {
+const FIELDS: Record<StackServiceId, { key: keyof StackService; label: string; reveal?: boolean; secret?: boolean }[]> = {
   "core-node": [
     { key: "endpoint", label: "RPC URL" },
     { key: "binary", label: "bitcoind", reveal: true },
@@ -22,7 +22,11 @@ const FIELDS: Record<StackServiceId, { key: keyof StackService; label: string; r
     { key: "image", label: "Docker image" },
     { key: "publish", label: "Published port" },
   ],
-  "knots-node": [{ key: "endpoint", label: "RPC URL (tunnel)" }],
+  "knots-node": [
+    { key: "endpoint", label: "LAN RPC URL" },
+    { key: "rpcUser", label: "RPC user" },
+    { key: "rpcPassword", label: "RPC password", secret: true },
+  ],
   "knots-fulcrum": [{ key: "endpoint", label: "Electrum URL" }],
   "knots-link": [
     { key: "endpoint", label: "Local RPC URL" },
@@ -36,29 +40,36 @@ const FIELDS: Record<StackServiceId, { key: keyof StackService; label: string; r
 export function StackManager() {
   const [config, setConfig] = useState<StackConfig | null>(null);
   const [rows, setRows] = useState<StackStatusRow[]>([]);
+  const [statusPending, setStatusPending] = useState(true);
   const [summary, setSummary] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    const [cfgRes, statusRes] = await Promise.all([
-      fetch("/api/stack/config", { cache: "no-store" }),
-      fetch("/api/stack/status", { cache: "no-store" }),
-    ]);
+  const loadConfig = useCallback(async () => {
+    const cfgRes = await fetch("/api/stack/config", { cache: "no-store" });
     const cfgJson = await cfgRes.json();
-    const statusJson = await statusRes.json();
     if (!cfgRes.ok) throw new Error(cfgJson.error ?? "could not load stack config");
     setConfig(cfgJson.config);
-    if (statusRes.ok) {
+  }, []);
+
+  const loadStatus = useCallback(async () => {
+    setStatusPending(true);
+    try {
+      const statusRes = await fetch("/api/stack/status", { cache: "no-store" });
+      const statusJson = await statusRes.json();
+      if (!statusRes.ok) throw new Error(statusJson.error ?? "stack status failed");
       setRows(statusJson.rows ?? []);
       setSummary(statusJson.summary ?? "");
+    } finally {
+      setStatusPending(false);
     }
   }, []);
 
   useEffect(() => {
-    void load().catch((err) => setError(err instanceof Error ? err.message : String(err)));
-  }, [load]);
+    void loadConfig().catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    void loadStatus().catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [loadConfig, loadStatus]);
 
   const patch = (id: StackServiceId, key: keyof StackService, value: string) => {
     setConfig((current) => {
@@ -83,7 +94,7 @@ export function StackManager() {
       if (!res.ok) throw new Error(json.error ?? "save failed");
       setConfig(json.config);
       setNotice("Saved.");
-      await load();
+      void loadStatus().catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -126,7 +137,7 @@ export function StackManager() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "action failed");
       setNotice(json.message ?? "Done.");
-      await load();
+      void loadStatus().catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -149,7 +160,7 @@ export function StackManager() {
           Locations for the node, the indexers, and the files you edit by hand. Start and stop
           apply to this computer. Knots on StartOS stays a status row.
         </p>
-        {summary ? <p className="banner warn">{summary}</p> : null}
+        {summary ? <p className="banner warn">{summary}</p> : statusPending ? <p className="muted">Checking services…</p> : null}
         {notice ? <p className="banner ok">{notice}</p> : null}
         {error ? <p className="banner bad">{error}</p> : null}
       </section>
@@ -160,7 +171,9 @@ export function StackManager() {
             <div className="section-head">
               <h3>
                 {svc.label}{" "}
-                <span className={`stack-state is-${row?.state ?? "unset"}`}>{row?.state ?? "…"}</span>
+                <span className={`stack-state is-${row?.state ?? "checking"}`}>
+                  {row?.state ?? "checking"}
+                </span>
               </h3>
               {svc.control === "local" ? (
                 <span className="stack-actions">
@@ -175,7 +188,7 @@ export function StackManager() {
                 <span className="muted">Observed</span>
               )}
             </div>
-            {row?.detail ? <p className="muted">{row.detail}</p> : null}
+            {row?.detail ? <p className="muted">{row.detail}</p> : statusPending ? <p className="muted">Checking…</p> : null}
             {FIELDS[svc.id].map((field) => {
               const value = String(svc[field.key] ?? "");
               return (
@@ -185,6 +198,8 @@ export function StackManager() {
                     <input
                       value={value}
                       spellCheck={false}
+                      type={field.secret ? "password" : "text"}
+                      autoComplete="off"
                       onChange={(e) => patch(svc.id, field.key, e.target.value)}
                     />
                     {field.reveal && value ? (

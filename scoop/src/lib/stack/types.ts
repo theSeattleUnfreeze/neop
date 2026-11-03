@@ -26,6 +26,9 @@ export type StackService = {
   datadir: string;
   configFile: string;
   cookieFile: string;
+  /** Optional RPC basic auth. Stays in the local stack file, never in git. */
+  rpcUser: string;
+  rpcPassword: string;
   containerName: string;
   image: string;
   /** Docker publish spec, host side first: 127.0.0.1:50111:50111 */
@@ -67,6 +70,8 @@ export function emptyService(id: StackServiceId, label: string, control: "local"
     datadir: "",
     configFile: "",
     cookieFile: "",
+    rpcUser: "",
+    rpcPassword: "",
     containerName: "",
     image: "",
     publish: "",
