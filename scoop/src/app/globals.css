@@ -171,6 +171,11 @@ a {
   border-color: var(--scoop-both-border);
 }
 
+.presence-chip.bound {
+  background: var(--scoop-bg);
+  color: var(--scoop-fg);
+}
+
 .presence-chip.none,
 .presence-chip.mixed {
   background: var(--scoop-bg);

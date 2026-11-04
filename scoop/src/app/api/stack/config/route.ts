@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server";
+import { localOnly } from "@/lib/api/localOnly";
 import { loadStackConfig, normalizeStackConfig, saveStackConfig } from "@/lib/stack/config";
 import type { StackConfig } from "@/lib/stack/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function localOnly(req: Request): NextResponse | null {
-  if (req.headers.get("x-scoop-local") !== "1") {
-    return NextResponse.json({ error: "missing local header" }, { status: 403 });
-  }
-  return null;
-}
-
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = localOnly(req);
+  if (denied) return denied;
   try {
     return NextResponse.json({ config: loadStackConfig() });
   } catch (err) {

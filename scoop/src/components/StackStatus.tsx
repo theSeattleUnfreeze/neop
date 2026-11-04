@@ -16,7 +16,10 @@ export function StackStatus() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/stack/status", { cache: "no-store" });
+      const res = await fetch("/api/stack/status", {
+        cache: "no-store",
+        headers: { "x-scoop-local": "1" },
+      });
       const json = (await res.json()) as Status & { error?: string };
       if (!res.ok) throw new Error(json.error ?? "stack status failed");
       setStatus(json);

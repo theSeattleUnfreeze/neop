@@ -63,6 +63,23 @@ describe("balances", () => {
     assert.equal(totals.bothCount, 1);
   });
 
+  it("does not count a core-bound outpoint as replay", () => {
+    const row = annotate({
+      scriptId: 4,
+      address: "bc1q",
+      core: { status: "spent", txid: "aa", vout: 0 },
+      knots: { status: "unspent", txid: "aa", vout: 0, valueSats: 42 },
+    });
+    const [account] = aggregateAccountBalances(
+      [{ id: 1, source: "electrum", watchAccountId: 1 }],
+      [{ ...row, accountId: 1, watchAccountId: 1 }]
+    );
+    assert.equal(row.coreBoundOk, true);
+    assert.equal(account.bothCount, 0);
+    assert.equal(account.knotsSats, 42n);
+    assert.equal(account.coreSats, 0n);
+  });
+
   it("parses manual sats input", () => {
     assert.equal(parseSatsInput(null), null);
     assert.equal(parseSatsInput(""), null);

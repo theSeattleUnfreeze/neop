@@ -4,6 +4,8 @@ import {
   isNewReplayReceive,
   isReplayReceive,
   outpointKey,
+  persistedSpentMarkers,
+  spentMarkersFromOutpoints,
   replayDedupeKey,
   shouldCreateReplayAlert,
 } from "./replayReceive.ts";
@@ -53,6 +55,41 @@ describe("replayReceive", () => {
     assert.equal(
       replayDedupeKey("FF".repeat(32), "Aa".repeat(32), 0),
       `replay:${"ff".repeat(32)}:${"aa".repeat(32)}:0`
+    );
+  });
+
+  it("keeps a Core spend marker while Knots still has the outpoint", () => {
+    const txid = "aa".repeat(32);
+    const prior = [
+      { tip: "core" as const, txid, vout: 0, status: "unspent" as const },
+      { tip: "knots" as const, txid, vout: 0, status: "unspent" as const },
+    ];
+    const once = persistedSpentMarkers(prior, [], [u(txid, 0, 42)]);
+    assert.deepEqual(once, [{ tip: "core", txid, vout: 0 }]);
+    const again = persistedSpentMarkers(
+      [
+        { tip: "core", txid, vout: 0, status: "spent" },
+        { tip: "knots", txid, vout: 0, status: "unspent" },
+      ],
+      [],
+      [u(txid, 0, 42)]
+    );
+    assert.deepEqual(again, [{ tip: "core", txid, vout: 0 }]);
+    assert.deepEqual(persistedSpentMarkers(prior, [], []), []);
+  });
+
+  it("reads a Core spend from the live catalog without a prior row", () => {
+    const txid = "dd".repeat(32);
+    assert.deepEqual(
+      spentMarkersFromOutpoints([
+        {
+          txid,
+          vout: 1,
+          core: { status: "spent" },
+          knots: { status: "unspent" },
+        },
+      ]),
+      [{ tip: "core", txid, vout: 1 }]
     );
   });
 

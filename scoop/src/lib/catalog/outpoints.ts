@@ -188,25 +188,36 @@ export type SplitSummary = {
   replay: number;
   knotsOnly: number;
   coreOnly: number;
+  /** Spent on Core, still unspent on Knots. Not replay, and not a Knots-only coin. */
+  coreBound: number;
   unclassified: number;
   publishedScripts: number;
   hashedScripts: number;
 };
 
 export function splitSummary(
-  rows: { presence: Presence; replayRisk?: boolean; classified?: boolean; scriptId: number; witness?: WitnessState }[],
+  rows: {
+    presence: Presence;
+    replayRisk?: boolean;
+    coreBoundOk?: boolean;
+    classified?: boolean;
+    scriptId: number;
+    witness?: WitnessState;
+  }[],
   scripts: { id: number; witnessState?: string | null }[] = []
 ): SplitSummary {
   let replay = 0;
   let knotsOnly = 0;
   let coreOnly = 0;
+  let coreBound = 0;
   let unclassified = 0;
   for (const row of rows) {
     if (row.classified === false) {
       unclassified += 1;
       continue;
     }
-    if (row.replayRisk || row.presence === "both") replay += 1;
+    if (row.replayRisk) replay += 1;
+    else if (row.coreBoundOk) coreBound += 1;
     else if (row.presence === "knots_only") knotsOnly += 1;
     else if (row.presence === "core_only") coreOnly += 1;
   }
@@ -225,6 +236,7 @@ export function splitSummary(
     replay,
     knotsOnly,
     coreOnly,
+    coreBound,
     unclassified,
     publishedScripts: published.size,
     hashedScripts: hashed.size,

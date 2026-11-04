@@ -103,6 +103,22 @@ function postRpc(
   });
 }
 
+export type RpcAttempt = { status: number; text: string; location: string };
+
+/** Prefer an authenticated RPC answer over a parallel 401 or a redirect. */
+export function selectRpcAttempt(attempts: RpcAttempt[]): RpcAttempt | null {
+  const live = attempts.filter((attempt) => attempt.status > 0);
+  const ok = live.find((attempt) => attempt.status >= 200 && attempt.status < 300);
+  if (ok) return ok;
+  const unauthorized = live.find((attempt) => attempt.status === 401);
+  if (unauthorized) return unauthorized;
+  const redirect = live.find(
+    (attempt) => attempt.status >= 300 && attempt.status < 400 && attempt.location
+  );
+  if (redirect) return redirect;
+  return live[0] ?? null;
+}
+
 function rpcFromResponse(res: { status: number; text: string }): Pick<
   StackStatusRow,
   "state" | "height" | "headers" | "detail"
@@ -134,41 +150,24 @@ async function probeRpc(svc: StackService): Promise<Pick<StackStatusRow, "state"
   if (svc.endpoint.startsWith("http://")) {
     urls.push(`https://${svc.endpoint.slice("http://".length)}`);
   }
-  const settled = await new Promise<{
-    good: { status: number; text: string; location: string } | null;
-    redirect: { status: number; text: string; location: string } | null;
-    fallback: { status: number; text: string; location: string } | null;
-    error: string;
-  }>((resolve) => {
-    let pending = urls.length;
-    let redirect: { status: number; text: string; location: string } | null = null;
-    let fallback: { status: number; text: string; location: string } | null = null;
-    let error = "fetch failed";
-    const finish = () => resolve({ good: null, redirect, fallback, error });
-    for (const url of urls) {
-      postRpc(url, headers, body).then(
-        (res) => {
-          if (res.status === 401 || (res.status >= 200 && res.status < 300)) {
-            resolve({ good: res, redirect, fallback, error });
-            return;
-          }
-          if (res.status >= 300 && res.status < 400 && res.location) redirect = res;
-          else fallback = res;
-          pending -= 1;
-          if (pending === 0) finish();
-        },
-        (err: unknown) => {
-          error = err instanceof Error ? err.message : String(err);
-          pending -= 1;
-          if (pending === 0) finish();
-        }
-      );
-    }
-  });
-  if (settled.good) return rpcFromResponse(settled.good);
-  if (settled.redirect?.location) {
+  const attempts: RpcAttempt[] = [];
+  let error = "fetch failed";
+  await Promise.all(
+    urls.map(async (url) => {
+      try {
+        attempts.push(await postRpc(url, headers, body));
+      } catch (err) {
+        error = err instanceof Error ? err.message : String(err);
+      }
+    })
+  );
+  const chosen = selectRpcAttempt(attempts);
+  if (chosen && (chosen.status === 401 || (chosen.status >= 200 && chosen.status < 300))) {
+    return rpcFromResponse(chosen);
+  }
+  if (chosen && chosen.status >= 300 && chosen.status < 400 && chosen.location) {
     try {
-      const followed = await postRpc(new URL(settled.redirect.location, svc.endpoint).toString(), headers, body);
+      const followed = await postRpc(new URL(chosen.location, svc.endpoint).toString(), headers, body);
       if (followed.status === 401 || (followed.status >= 200 && followed.status < 300)) {
         return rpcFromResponse(followed);
       }
@@ -176,8 +175,7 @@ async function probeRpc(svc: StackService): Promise<Pick<StackStatusRow, "state"
       // The redirect target failed; report the redirect below.
     }
   }
-  if (settled.fallback) return rpcFromResponse(settled.fallback);
-  if (settled.redirect) return rpcFromResponse(settled.redirect);
+  if (chosen) return rpcFromResponse(chosen);
   const open = await endpointTcpOpen(svc.endpoint);
   if (open) {
     return {
@@ -187,7 +185,7 @@ async function probeRpc(svc: StackService): Promise<Pick<StackStatusRow, "state"
       detail: "Port is open; RPC timed out (node may be syncing).",
     };
   }
-  return { state: "down", height: null, headers: null, detail: settled.error };
+  return { state: "down", height: null, headers: null, detail: error };
 }
 
 function endpointTcpOpen(endpoint: string): Promise<boolean> {

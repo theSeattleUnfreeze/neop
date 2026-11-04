@@ -1,4 +1,4 @@
-import type { annotate, Presence } from "@/lib/catalog/presence";
+import { sameUnspentOutpoint, type annotate, type Presence } from "@/lib/catalog/presence";
 import type { UnspentItem } from "@/lib/sync/fetchTip";
 
 export type AnnotatedRow = ReturnType<typeof annotate> & {
@@ -59,7 +59,7 @@ export function aggregateScriptBalances(rows: AnnotatedRow[]): ScriptBalance[] {
     presence: r.presence,
     coreSats: r.core.status === "unspent" ? BigInt(r.core.valueSats ?? 0) : 0n,
     knotsSats: r.knots.status === "unspent" ? BigInt(r.knots.valueSats ?? 0) : 0n,
-    both: r.presence === "both",
+    both: sameUnspentOutpoint(r.core, r.knots),
     spill: r.spill,
     coreBoundOk: r.coreBoundOk,
   }));

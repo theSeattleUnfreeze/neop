@@ -52,12 +52,11 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
     const knots = urls.shulcrum
       ? await fetchScriptTip("knots", urls.shulcrum, s.electrumScripthash)
       : undefined;
-    rows.push(
-      ...outpointRowsFromTips(s.id, s.address, core, knots, {
-        accountId: s.accountId,
-        watchAccountId: s.accountId,
-      })
-    );
+    const live = outpointRowsFromTips(s.id, s.address, core, knots, {
+      accountId: s.accountId,
+      watchAccountId: s.accountId,
+    });
+    rows.push(...live);
     await db
       .update(watchedScripts)
       .set({ witnessState: witnessFromTips(core, knots) })
@@ -74,6 +73,7 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
         address: s.address,
         coreUnspent: core.unspent,
         knotsUnspent: knots.unspent,
+        liveOutpoints: live,
       });
       newNotifications.push(...replay.newNotifications);
     } else {

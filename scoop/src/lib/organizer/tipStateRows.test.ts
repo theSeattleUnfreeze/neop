@@ -51,4 +51,38 @@ describe("tipStateRows", () => {
     assert.equal(coreSats, 1500);
     assert.equal(knotsSats, 1000);
   });
+
+  it("keeps a Core spend as core-bound when Knots still has the outpoint", () => {
+    const txid = "cc".repeat(16);
+    const rows = outpointRowsFromStored(
+      2,
+      "bc1q",
+      [
+        {
+          scriptId: 2,
+          tip: "core",
+          outpointTxid: txid,
+          outpointVout: 0,
+          status: "spent",
+          valueSats: null,
+        },
+        {
+          scriptId: 2,
+          tip: "knots",
+          outpointTxid: txid,
+          outpointVout: 0,
+          status: "unspent",
+          valueSats: 42n,
+        },
+      ],
+      3,
+      "published"
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].core.status, "spent");
+    assert.equal(rows[0].knots.status, "unspent");
+    assert.equal(rows[0].coreBoundOk, true);
+    assert.equal(rows[0].replayRisk, false);
+    assert.equal(rows[0].presence, "both");
+  });
 });

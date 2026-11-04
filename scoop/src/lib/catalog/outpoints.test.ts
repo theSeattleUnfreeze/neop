@@ -83,6 +83,24 @@ describe("outpoint rows", () => {
     assert.equal(witnessFromTips(undefined, undefined), "unknown");
   });
 
+  it("does not count a core-bound outpoint in the replay summary", () => {
+    const txid = "aa".repeat(16);
+    const rows = outpointRowsFromTips(
+      6,
+      "bc1q",
+      snap("core", [], [
+        { tx_hash: txid, height: 1 },
+        { tx_hash: "bb".repeat(16), height: 2 },
+      ]),
+      snap("knots", [{ tx_hash: txid, tx_pos: 0, value: 42, height: 1 }])
+    );
+    const summary = splitSummary(rows);
+    assert.equal(summary.replay, 0);
+    assert.equal(summary.coreBound, 1);
+    assert.equal(summary.knotsOnly, 0);
+    assert.equal(rows[0].coreBoundOk, true);
+  });
+
   it("summarizes a split wave without calling a mixed group replay risk", () => {
     const rows = outpointRowsFromTips(
       4,

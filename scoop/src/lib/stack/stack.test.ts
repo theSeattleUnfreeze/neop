@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { loadStackConfig, normalizeStackConfig, revealablePaths, saveStackConfig } from "./config.ts";
-import { rpcProbeFromHttp } from "./probe.ts";
+import { rpcProbeFromHttp, selectRpcAttempt } from "./probe.ts";
 import { summarizeStack } from "./summarize.ts";
 import type { StackStatusRow } from "./types.ts";
 
@@ -62,6 +62,19 @@ describe("rpc probe", () => {
     assert.equal(row.state, "up");
     assert.equal(row.height, null);
     assert.match(row.detail, /credentials/);
+  });
+
+  it("prefers a successful RPC answer over a parallel 401", () => {
+    const chosen = selectRpcAttempt([
+      { status: 401, text: "", location: "" },
+      { status: 200, text: "{}", location: "" },
+    ]);
+    assert.equal(chosen?.status, 200);
+    const onlyDenied = selectRpcAttempt([
+      { status: 0, text: "", location: "" },
+      { status: 401, text: "", location: "" },
+    ]);
+    assert.equal(onlyDenied?.status, 401);
   });
 });
 

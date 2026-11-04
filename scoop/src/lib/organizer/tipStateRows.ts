@@ -29,45 +29,44 @@ export function outpointRowsFromStored(
 ): OutpointRow[] {
   const map = new Map<string, { txid: string; vout: number; core?: StoredTip; knots?: StoredTip }>();
   for (const state of states) {
-    if (state.status !== "unspent") continue;
+    if (state.status !== "unspent" && state.status !== "spent") continue;
     const txid = state.outpointTxid.toLowerCase();
     const key = `${txid}:${state.outpointVout}`;
     const row = map.get(key) ?? { txid, vout: state.outpointVout };
     row[state.tip] = state;
     map.set(key, row);
   }
+  const view = (state: StoredTip | undefined, txid: string, vout: number): TipView => {
+    if (!state) return { status: "absent" };
+    if (state.status === "unspent") {
+      return {
+        status: "unspent",
+        txid,
+        vout,
+        valueSats: Number(state.valueSats ?? 0n),
+      };
+    }
+    return { status: "spent", txid, vout };
+  };
   return [...map.values()]
     .sort((a, b) => a.txid.localeCompare(b.txid) || a.vout - b.vout)
     .map((side) => {
-      const core: TipView = side.core
-        ? {
-            status: "unspent",
-            txid: side.txid,
-            vout: side.vout,
-            valueSats: Number(side.core.valueSats ?? 0n),
-          }
-        : { status: "absent" };
-      const knots: TipView = side.knots
-        ? {
-            status: "unspent",
-            txid: side.txid,
-            vout: side.vout,
-            valueSats: Number(side.knots.valueSats ?? 0n),
-          }
-        : { status: "absent" };
+      const core = view(side.core, side.txid, side.vout);
+      const knots = view(side.knots, side.txid, side.vout);
       const coin: CoinRow = { scriptId, address, core, knots };
       const annotated = annotate(coin);
       return {
         ...annotated,
         txid: side.txid,
         vout: side.vout,
-        replayRisk: annotated.presence === "both",
+        replayRisk: core.status === "unspent" && knots.status === "unspent",
         classified: true,
         witness,
         accountId: watchAccountId,
         watchAccountId,
       };
-    });
+    })
+    .filter((row) => row.core.status === "unspent" || row.knots.status === "unspent");
 }
 
 /** Build annotated catalog rows from persisted script_tip_state (post-sync dashboard). */
