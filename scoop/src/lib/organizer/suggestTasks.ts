@@ -1,4 +1,5 @@
 import type { AnnotatedRow } from "@/lib/catalog/balances";
+import { sameUnspentOutpoint } from "@/lib/catalog/presence";
 
 export type SuggestedTask = {
   dedupeKey: string;
@@ -10,12 +11,12 @@ export type SuggestedTask = {
 };
 
 /**
- * Build auto task suggestions from annotated sync rows.
- * Replay-receive tasks are usually created by applyReplayReceiveSync;
- * this still emits auto_both for dual presence without requiring outpoint match.
+ * Build auto task suggestions from per-outpoint sync rows.
+ * Replay risk is the same outpoint unspent on both tips.
+ * Different outpoints on one address do not get a split task.
  */
 export function suggestTasksFromRows(
-  rows: AnnotatedRow[],
+  rows: (AnnotatedRow & { replayRisk?: boolean })[],
   opts: { accountId?: number; labelPrefix?: string } = {}
 ): SuggestedTask[] {
   const prefix = opts.labelPrefix ? `${opts.labelPrefix}: ` : "";
@@ -41,45 +42,19 @@ export function suggestTasksFromRows(
         scriptId: r.scriptId,
       });
     }
-    if (r.presence === "both" && !r.spill) {
-      const coreUnspent = r.core.status === "unspent";
-      const knotsUnspent = r.knots.status === "unspent";
-      if (coreUnspent && knotsUnspent) {
-        const sameOutpoint =
-          r.core.txid &&
-          r.knots.txid &&
-          r.core.txid.toLowerCase() === r.knots.txid.toLowerCase() &&
-          r.core.vout === r.knots.vout;
-        if (sameOutpoint) {
-          out.push({
-            dedupeKey: `auto_replay_receive:script:${r.scriptId}:${r.core.txid}:${r.core.vout}`,
-            kind: "auto_replay_receive",
-            title: `${prefix}Replay received — split before spending (${label})`,
-            body: "Same outpoint unspent on Core and Knots. Split before spending on either tip.",
-            scriptId: r.scriptId,
-            metadata: {
-              txid: r.core.txid!,
-              vout: String(r.core.vout ?? 0),
-            },
-          });
-        } else {
-          out.push({
-            dedupeKey: `auto_both:script:${r.scriptId}`,
-            kind: "auto_both",
-            title: `${prefix}Plan split ceremony for ${label}`,
-            body: "Present on both tips. Plan a replay-safe split before ordinary spends.",
-            scriptId: r.scriptId,
-          });
-        }
-      } else if (r.presence === "both") {
-        out.push({
-          dedupeKey: `auto_both:script:${r.scriptId}`,
-          kind: "auto_both",
-          title: `${prefix}Plan split ceremony for ${label}`,
-          body: "Present on both tips. Plan a replay-safe split before ordinary spends.",
-          scriptId: r.scriptId,
-        });
-      }
+    const replay = r.replayRisk === true || sameUnspentOutpoint(r.core, r.knots);
+    if (replay && r.core.txid) {
+      out.push({
+        dedupeKey: `auto_replay_receive:script:${r.scriptId}:${r.core.txid}:${r.core.vout ?? 0}`,
+        kind: "auto_replay_receive",
+        title: `${prefix}Replay received — split before spending (${label})`,
+        body: "This outpoint is unspent on Core and Knots. A spend made only of such outpoints can confirm on both chains. Include a Knots-only input, or sweep the whole Knots side in one signed wave, before broadcasting.",
+        scriptId: r.scriptId,
+        metadata: {
+          txid: r.core.txid,
+          vout: String(r.core.vout ?? 0),
+        },
+      });
     }
   }
 

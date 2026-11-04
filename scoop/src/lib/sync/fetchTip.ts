@@ -1,5 +1,6 @@
 import type { Tip } from "@/lib/catalog/presence";
 import { ElectrumClient } from "@/lib/electrum/client";
+import { loadStackConfig, serviceById } from "@/lib/stack/config";
 
 export type UnspentItem = {
   tx_hash: string;
@@ -58,8 +59,18 @@ export function envElectrumUrls(env: NodeJS.ProcessEnv = process.env): {
   fulcrum?: string;
   shulcrum?: string;
 } {
-  return {
-    fulcrum: env.FULCRUM_URL,
-    shulcrum: env.SHULCRUM_URL,
-  };
+  try {
+    const config = loadStackConfig(undefined, env);
+    const fulcrum = serviceById(config, "core-fulcrum").endpoint || env.FULCRUM_URL;
+    const shulcrum = serviceById(config, "knots-fulcrum").endpoint || env.SHULCRUM_URL;
+    return {
+      fulcrum: fulcrum || undefined,
+      shulcrum: shulcrum || undefined,
+    };
+  } catch {
+    return {
+      fulcrum: env.FULCRUM_URL,
+      shulcrum: env.SHULCRUM_URL,
+    };
+  }
 }

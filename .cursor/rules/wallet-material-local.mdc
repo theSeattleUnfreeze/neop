@@ -1,0 +1,15 @@
+---
+description: Wallet files, xpubs, addresses, and seeds stay on this machine
+alwaysApply: true
+---
+
+# Wallet material stays on this machine
+
+Seeds, xprvs, xpubs, descriptors, addresses, master fingerprints, and wallet files are operator secrets.
+
+- Parse and inspect them only in a local process. Do not send the bytes or the decoded values to a hosted API, block explorer, issue, pull request, commit, log, or chat.
+- Do not print them in tool output or replies. A format check may report the file type, script type, and whether a public key was found.
+- Electrum queries for a real wallet go only to the operator's own Fulcrum and Shulcrum. Do not point those URLs at a public server.
+- Do not commit wallet files, Postgres data, or `~/.neop/stack.json`.
+
+Normative write-up: `docs/scoop.md` (Self-hosted privacy).

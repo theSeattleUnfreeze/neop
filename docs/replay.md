@@ -102,6 +102,7 @@ See [rpc.md](rpc.md):
 
 ## Related docs
 
+- [coin-control.md](coin-control.md) — outpoint vs address, one signed wave per chain, Coldcard multisig witness disclosure
 - [lightning.md](lightning.md) — Lightning migration digest; gist is SoT for channel splits
 - [architecture.md](architecture.md) — wrapper-first ethos (points here for wedges)
 - [rpc.md](rpc.md) — method contract

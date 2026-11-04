@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveWatch } from "@/lib/electrum/address";
-import { coinRowFromTips } from "@/lib/sync/buildRows";
+import { outpointRowsFromTips } from "@/lib/catalog/outpoints";
 import { envElectrumUrls, fetchScriptTip } from "@/lib/sync/fetchTip";
 
 export const runtime = "nodejs";
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       ? await fetchScriptTip("knots", urls.shulcrum, s.scripthash)
       : undefined;
     rows.push(
-      coinRowFromTips(s.id ?? 0, s.address, core, knots, {
+      ...outpointRowsFromTips(s.id ?? 0, s.address, core, knots, {
         accountId: s.accountId ?? null,
         watchAccountId: s.watchAccountId ?? s.accountId ?? null,
       })

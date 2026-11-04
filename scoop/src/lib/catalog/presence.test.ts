@@ -131,8 +131,8 @@ describe("buildRows", () => {
         history: [{ tx_hash: "dd".repeat(32), height: 100 }],
       }
     );
-    assert.equal(row.presence, "both");
-    assert.equal(row.coreBoundOk, true);
+    assert.equal(row.presence, "knots_only");
+    assert.equal(row.coreBoundOk, false);
     assert.equal(row.spill, false);
     assert.equal(detectSpills([row]).length, 0);
   });

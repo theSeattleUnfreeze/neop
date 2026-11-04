@@ -116,6 +116,10 @@ Pin engine versions; **do not reimplement** Blake2b PoW, v2 header crypto, conse
 
 **Wallets (agents):** Core = Sparrow + Fulcrum; Knots = Shrike + privkeyio Fulcrum (or Shulcrum) — no stock-Sparrow profile switcher. See [docs/wallets.md](docs/wallets.md), [docs/deploy-metal.md](docs/deploy-metal.md), [docs/electrum.md](docs/electrum.md).
 
+**Coin control (agents):** Read [docs/coin-control.md](docs/coin-control.md) before advising a split, a Coldcard entropy question, or a multisig exit. Replay is per outpoint (`both` means that `txid:vout` is unspent on both tips). A mixed address is not replay risk. The first spend of a still-hashed multisig script publishes every cosigner key in it; sign every live outpoint of that policy on the chain before the first broadcast, to a new policy. One consolidating transaction and a same-wave set of smaller transactions are both complete. Staggering them across blocks is the theft window. Do not describe a seed search. Do not print wallet material. Scoop does not sign.
+
+**Wallet material stays on this machine.** Seeds, xprvs, xpubs, descriptors, addresses, master fingerprints, and wallet files are operator secrets. Parse them only in a local process. Do not send them to hosted APIs, block explorers, issues, pull requests, commits, logs, or chat, and do not print them in tool output. A format check reports file type and whether a public key was found, not the key. Electrum URLs stay on the operator's own Fulcrum / Shulcrum. See [docs/scoop.md](docs/scoop.md).
+
 See [docs/architecture.md](docs/architecture.md), [docs/rpc.md](docs/rpc.md), [docs/replay.md](docs/replay.md), [docs/lightning.md](docs/lightning.md), [docs/deploy-metal.md](docs/deploy-metal.md), [docs/wallets.md](docs/wallets.md), [docs/electrum.md](docs/electrum.md), [docs/testnet4.md](docs/testnet4.md), [docs/hosting.md](docs/hosting.md).
 
 ### Conventions

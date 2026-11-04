@@ -6,7 +6,9 @@ import {
 } from "@/lib/db/schema";
 import {
   isReplayReceive,
+  persistedSpentMarkers,
   replayDedupeKey,
+  spentMarkersFromOutpoints,
   shouldCreateReplayAlert,
   type PriorTipOutpoint,
 } from "@/lib/catalog/replayReceive";
@@ -21,6 +23,8 @@ export type ReplaySyncInput = {
   address?: string | null;
   coreUnspent: UnspentItem[];
   knotsUnspent: UnspentItem[];
+  /** Live outpoint rows for this script, so a Core spend is kept even on the first sync that sees it. */
+  liveOutpoints?: { txid: string; vout: number; core: { status: string }; knots: { status: string } }[];
 };
 
 export type ReplaySyncResult = {
@@ -144,6 +148,25 @@ export async function applyReplayReceiveSync(
 
   await replaceTipUnspent(db, scriptId, "core", input.coreUnspent);
   await replaceTipUnspent(db, scriptId, "knots", input.knotsUnspent);
+  const markers = [
+    ...persistedSpentMarkers(prior, input.coreUnspent, input.knotsUnspent),
+    ...spentMarkersFromOutpoints(input.liveOutpoints ?? []),
+  ].filter((marker, index, all) => {
+    const id = `${marker.tip}:${marker.txid}:${marker.vout}`;
+    return all.findIndex((other) => `${other.tip}:${other.txid}:${other.vout}` === id) === index;
+  });
+  if (markers.length) {
+    await db.insert(scriptTipState).values(
+      markers.map((marker) => ({
+        scriptId,
+        tip: marker.tip,
+        outpointTxid: marker.txid,
+        outpointVout: marker.vout,
+        status: "spent" as const,
+        valueSats: null,
+      }))
+    );
+  }
 
   return { hits, newNotifications };
 }

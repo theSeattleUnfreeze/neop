@@ -25,6 +25,7 @@ Electrum clients verify header PoW themselves. Stock Sparrow expects **80-byte S
 - Core Electrum = **Fulcrum only** (do not use electrs with neop).
 - Broadcast Core-bound OP_RETURN ceremony txs only from Sparrow on the Core/Fulcrum path.
 - Replay-exposed (`both`) coins: use `neop_cli protect-psbt` / later `protectwallet` — see [replay.md](replay.md).
+- Outpoint, mixed address, one-wave exit, and affected Coldcard multisig: [coin-control.md](coin-control.md). Replay is per outpoint. The first spend of a still-hashed multisig script publishes that script’s cosigner keys.
 
 ## Connection checklist
 
@@ -35,8 +36,9 @@ Electrum clients verify header PoW themselves. Stock Sparrow expects **80-byte S
 
 ### Electrum / xpub for Scoop
 
-Scoop Electrum-linked **wallets** prefer a Sparrow **account xpub** (auto-expands receive
-addresses). Advanced: paste one Bitcoin address. See
+Scoop Electrum-linked **wallets** prefer a Sparrow **account xpub** copied from the account
+**Settings** tab. **File → Export Wallet → Sparrow** is a `.mv.db` database for another Sparrow,
+which Scoop does not read. Advanced: paste one Bitcoin address. See
 [scoop.md — Linking a Sparrow wallet](scoop.md#linking-a-sparrow-or-shrike-wallet).
 
 Print host/port hints: `python -m neop_cli electrum-endpoints`.

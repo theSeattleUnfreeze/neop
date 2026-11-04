@@ -63,15 +63,30 @@ export function filterByFlavor(row: CoinRow, flavor: Tip): boolean {
   return row.knots.status !== "absent";
 }
 
-export type CatalogFilter = "all" | "core" | "knots" | "spills";
+export type CatalogFilter = "all" | "core" | "knots" | "spills" | "replay";
 
-export function filterCatalogRows<T extends CoinRow & { spill: boolean }>(
-  rows: T[],
-  mode: CatalogFilter
-): T[] {
+export function sameUnspentOutpoint(core: TipView, knots: TipView): boolean {
+  return (
+    core.status === "unspent" &&
+    knots.status === "unspent" &&
+    core.txid !== undefined &&
+    knots.txid !== undefined &&
+    core.vout !== undefined &&
+    knots.vout !== undefined &&
+    core.txid.toLowerCase() === knots.txid.toLowerCase() &&
+    core.vout === knots.vout
+  );
+}
+
+export function filterCatalogRows<
+  T extends CoinRow & { spill: boolean; replayRisk?: boolean },
+>(rows: T[], mode: CatalogFilter): T[] {
   if (mode === "all") return rows;
   if (mode === "core") return rows.filter((r) => filterByFlavor(r, "core"));
   if (mode === "knots") return rows.filter((r) => filterByFlavor(r, "knots"));
+  if (mode === "replay") {
+    return rows.filter((r) => r.replayRisk === true || sameUnspentOutpoint(r.core, r.knots));
+  }
   return rows.filter((r) => r.spill);
 }
 

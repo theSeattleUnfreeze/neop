@@ -38,7 +38,7 @@ export function AccountCard(props: Props) {
       </div>
       <div className="account-meta">
         {props.bothCount > 0 ? (
-          <span className="presence-chip both">{props.bothCount} both</span>
+          <span className="presence-chip both">{props.bothCount} replay</span>
         ) : null}
         {props.openTaskCount > 0 ? (
           <span className="meta-badge">{props.openTaskCount} tasks</span>
