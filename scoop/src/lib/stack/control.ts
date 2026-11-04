@@ -16,6 +16,9 @@ export function startBlockReason(svc: StackService): string | null {
     if (!svc.containerName || !svc.image || !svc.datadir || !svc.configFile || !svc.publish) {
       return "Set the container name, image, datadir, config file, and published port first.";
     }
+    if (!svc.publish.startsWith("127.0.0.1:")) {
+      return "Docker publish must start with 127.0.0.1: so Core Fulcrum stays on this machine.";
+    }
     return null;
   }
   if (svc.id === "knots-link") {

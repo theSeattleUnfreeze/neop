@@ -115,7 +115,7 @@ async function dockerContainerStatus(name: string): Promise<string | null> {
 const BITCOIND_CANDIDATES =
   process.platform === "win32"
     ? [
-        "D:\\neop\\bin\\bitcoin-28.3\\bin\\bitcoind.exe",
+        process.env.CORE_BITCOIND ?? "",
         "C:\\Program Files\\Bitcoin\\daemon\\bitcoind.exe",
         path.join(process.env.LOCALAPPDATA ?? "", "Bitcoin", "bitcoind.exe"),
       ]
@@ -141,10 +141,7 @@ async function diagnoseCoreNode(svc: StackService): Promise<StackDiagnosis> {
   if (!binaryOk) {
     steps.push({
       title: "Point Scoop at bitcoind",
-      body:
-        process.platform === "win32"
-          ? "Scoop starts Core with the binary path in Details. Put Bitcoin Core 28.x on this PC (neop usually keeps it under D:\\neop\\bin\\bitcoin-28.3\\bin), then Save paths."
-          : "Install Bitcoin Core or pre-RDTS Knots for the Core chain, then set the bitcoind path in Details and Save paths.",
+      body: "Scoop starts Core with the binary path in Details. Install Bitcoin Core 28.x or pre-RDTS Knots for the Core chain, then Save paths.",
       revealPath: found[0] || svc.binary || undefined,
       suggest: found[0] ? { key: "binary", value: found[0] } : undefined,
     });
@@ -160,10 +157,7 @@ async function diagnoseCoreNode(svc: StackService): Promise<StackDiagnosis> {
   if (!datadirOk) {
     steps.push({
       title: "Set the Core data directory",
-      body:
-        process.platform === "win32"
-          ? "This machine's mainnet datadir is often E:\\Bitcoin. It must contain bitcoin.conf and .cookie once the node has started."
-          : "Set datadir to the folder that holds bitcoin.conf and the chainstate.",
+      body: "Set datadir to the folder that holds bitcoin.conf and the chainstate. It must contain bitcoin.conf and .cookie once the node has started.",
       revealPath: svc.datadir || undefined,
     });
   }

@@ -10,15 +10,18 @@ import {
 
 type Row = OutpointRow;
 
-function chipClass(presence: Row["presence"]): string {
-  if (presence === "core_only") return "core";
-  if (presence === "knots_only") return "knots";
-  if (presence === "both") return "both";
+function chipClass(row: Row): string {
+  if (row.classified === false) return "none";
+  if (row.coreBoundOk) return "bound";
+  if (row.presence === "core_only") return "core";
+  if (row.presence === "knots_only") return "knots";
+  if (row.presence === "both") return "both";
   return "none";
 }
 
 function presenceLabel(row: Row): string {
   if (row.classified === false) return "unconfirmed";
+  if (row.coreBoundOk) return "core-bound";
   if (row.presence === "none") return "empty";
   return row.presence.replaceAll("_", " ");
 }
@@ -117,7 +120,7 @@ function GroupRows({
           <td>{sats(r.core)}</td>
           <td>{sats(r.knots)}</td>
           <td>
-            <span className={`presence-chip ${r.classified === false ? "none" : chipClass(r.presence)}`}>
+            <span className={`presence-chip ${chipClass(r)}`}>
               {presenceLabel(r)}
             </span>
           </td>

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { localOnly } from "@/lib/api/localOnly";
 import { loadStackConfig, serviceById } from "@/lib/stack/config";
 import { controlService, isServiceId } from "@/lib/stack/control";
 
@@ -6,9 +7,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  if (req.headers.get("x-scoop-local") !== "1") {
-    return NextResponse.json({ error: "missing local header" }, { status: 403 });
-  }
+  const denied = localOnly(req);
+  if (denied) return denied;
   const body = (await req.json().catch(() => null)) as { id?: string; action?: string } | null;
   if (!body?.id || !isServiceId(body.id)) {
     return NextResponse.json({ error: "unknown service" }, { status: 400 });

@@ -4,6 +4,7 @@ import {
   isNewReplayReceive,
   isReplayReceive,
   outpointKey,
+  persistedSpentMarkers,
   replayDedupeKey,
   shouldCreateReplayAlert,
 } from "./replayReceive.ts";
@@ -54,6 +55,26 @@ describe("replayReceive", () => {
       replayDedupeKey("FF".repeat(32), "Aa".repeat(32), 0),
       `replay:${"ff".repeat(32)}:${"aa".repeat(32)}:0`
     );
+  });
+
+  it("keeps a Core spend marker while Knots still has the outpoint", () => {
+    const txid = "aa".repeat(32);
+    const prior = [
+      { tip: "core" as const, txid, vout: 0, status: "unspent" as const },
+      { tip: "knots" as const, txid, vout: 0, status: "unspent" as const },
+    ];
+    const once = persistedSpentMarkers(prior, [], [u(txid, 0, 42)]);
+    assert.deepEqual(once, [{ tip: "core", txid, vout: 0 }]);
+    const again = persistedSpentMarkers(
+      [
+        { tip: "core", txid, vout: 0, status: "spent" },
+        { tip: "knots", txid, vout: 0, status: "unspent" },
+      ],
+      [],
+      [u(txid, 0, 42)]
+    );
+    assert.deepEqual(again, [{ tip: "core", txid, vout: 0 }]);
+    assert.deepEqual(persistedSpentMarkers(prior, [], []), []);
   });
 
   it("skips alerts on bootstrap sync (empty prior)", () => {

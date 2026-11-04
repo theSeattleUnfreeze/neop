@@ -15,8 +15,20 @@ describe("stack control", () => {
     const core = emptyService("core-node", "Core node", "local");
     assert.match(startBlockReason(core) ?? "", /binary/);
     core.binary = "C:\\Bitcoin\\bitcoind.exe";
-    core.datadir = "E:\\Bitcoin";
+    core.datadir = "C:\\Bitcoin\\data";
     assert.equal(startBlockReason(core), null);
+  });
+
+  it("refuses a Core Fulcrum publish that is not loopback", () => {
+    const fulcrum = emptyService("core-fulcrum", "Core Fulcrum", "local");
+    fulcrum.containerName = "fulcrum";
+    fulcrum.image = "fulcrum";
+    fulcrum.datadir = "C:\\fulcrum";
+    fulcrum.configFile = "C:\\fulcrum\\fulcrum.conf";
+    fulcrum.publish = "0.0.0.0:50111:50111";
+    assert.match(startBlockReason(fulcrum) ?? "", /127\.0\.0\.1/);
+    fulcrum.publish = "127.0.0.1:50111:50111";
+    assert.equal(startBlockReason(fulcrum), null);
   });
 });
 

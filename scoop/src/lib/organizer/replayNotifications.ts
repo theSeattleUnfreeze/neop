@@ -6,6 +6,7 @@ import {
 } from "@/lib/db/schema";
 import {
   isReplayReceive,
+  persistedSpentMarkers,
   replayDedupeKey,
   shouldCreateReplayAlert,
   type PriorTipOutpoint,
@@ -144,6 +145,19 @@ export async function applyReplayReceiveSync(
 
   await replaceTipUnspent(db, scriptId, "core", input.coreUnspent);
   await replaceTipUnspent(db, scriptId, "knots", input.knotsUnspent);
+  const markers = persistedSpentMarkers(prior, input.coreUnspent, input.knotsUnspent);
+  if (markers.length) {
+    await db.insert(scriptTipState).values(
+      markers.map((marker) => ({
+        scriptId,
+        tip: marker.tip,
+        outpointTxid: marker.txid,
+        outpointVout: marker.vout,
+        status: "spent" as const,
+        valueSats: null,
+      }))
+    );
+  }
 
   return { hits, newNotifications };
 }

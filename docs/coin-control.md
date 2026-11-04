@@ -11,7 +11,7 @@ Wallet material stays on the machine. Do not ask for, print, or transmit seeds, 
 | **Outpoint** | One coin: `txid:vout` on a tip | An address |
 | **Address** | One script. It can hold many outpoints | A replay boundary |
 | **Policy** | The keys and threshold that can spend the script (a single key, or a multisig of cosigners) | One UTXO |
-| **Presence** | Where *that outpoint* is unspent: `core_only`, `knots_only`, or `both` | A property of the address |
+| **Presence** | Which tips have this outpoint in view: unspent, or spent when the other tip still holds it (`core_only`, `knots_only`, `both`) | A property of the address. `both` is not by itself replay risk |
 | **Replay risk** | That same outpoint is unspent on Core and on Knots, so a transaction that spends only such inputs can confirm on both tips | "This address has coins on both chains" |
 
 An address is **mixed** when its outpoints are not all the same presence. Some may be `both`, some `knots_only`, some `core_only`. Show that. Do not call the address replay-exposed. Spending a `knots_only` outpoint cannot confirm on Core. Spending a `core_only` outpoint cannot confirm on Knots. Only a spend made entirely of `both` outpoints can be replayed.
@@ -91,7 +91,7 @@ The balance, for a pre-fork balance that is still sitting in a single-vendor aff
 
 - One row per outpoint (`txid:vout`), grouped under the address.
 - Presence and the replay flag are on the outpoint. A mixed group is labeled mixed and is not a replay flag.
-- **Needs split** selects `both` rows only.
+- **Needs split** selects replay-risk rows (the same outpoint unspent on both tips). A Core-bound row can still have presence `both` because Core has spent it; the flag is core-bound, and the checklist counts those separately.
 - Per script, after a sync: **witness still hashed**, **witness published** (some transaction on either tip is not just a current funding output), or **unknown** when an indexer did not answer. That flag is not "safe to spend."
 - The split checklist states the one-wave exit, the common-input cost, and that a multisig spend publishes the cosigner keys. Scoop still does not sign.
 

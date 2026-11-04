@@ -14,4 +14,10 @@ describe("localOnly", () => {
     assert.ok(res);
     assert.equal(res.status, 403);
   });
+
+  it("rejects a non-loopback host even with the header", () => {
+    const req = new Request("http://evil.example/", { headers: { "x-scoop-local": "1" } });
+    const res = localOnly(req);
+    assert.equal(res?.status, 403);
+  });
 });

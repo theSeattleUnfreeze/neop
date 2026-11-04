@@ -27,7 +27,7 @@ export function StackManager() {
   }, []);
 
   const loadDiagnose = useCallback(async () => {
-    const res = await fetch("/api/stack/diagnose", { cache: "no-store" });
+    const res = await fetch("/api/stack/diagnose", { cache: "no-store", headers: LOCAL });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error ?? "diagnose failed");
     setDiagnoses(json.diagnoses ?? []);
@@ -36,7 +36,7 @@ export function StackManager() {
   const loadStatus = useCallback(async () => {
     setStatusPending(true);
     try {
-      const statusRes = await fetch("/api/stack/status", { cache: "no-store" });
+      const statusRes = await fetch("/api/stack/status", { cache: "no-store", headers: LOCAL });
       const statusJson = await statusRes.json();
       if (!statusRes.ok) throw new Error(statusJson.error ?? "stack status failed");
       setRows(statusJson.rows ?? []);

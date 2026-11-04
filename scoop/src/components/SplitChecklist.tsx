@@ -22,6 +22,7 @@ export function SplitChecklist({
         Replay risk is an outpoint that is unspent on both chains ({summary.replay}). An address
         that holds different outpoints on different chains is mixed. That mix is not itself replay
         risk. Knots-only outpoints: {summary.knotsOnly}. Core-only outpoints: {summary.coreOnly}.
+        Core-bound outpoints, spent on Core and still unspent on Knots: {summary.coreBound}.
       </p>
       {summary.unclassified > 0 ? (
         <p className="banner warn">

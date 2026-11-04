@@ -92,3 +92,41 @@ export function replayDedupeKey(
 ): string {
   return `replay:${scripthash.toLowerCase()}:${txid.toLowerCase()}:${vout}`;
 }
+
+export type SpentMarker = {
+  tip: "core" | "knots";
+  txid: string;
+  vout: number;
+};
+
+/**
+ * Remember an outpoint that left one tip and is still unspent on the other.
+ * Sync replaces a tip's rows, so a spent marker from the previous sync has to be written again.
+ */
+export function persistedSpentMarkers(
+  prior: PriorTipOutpoint[],
+  coreUnspent: UnspentItem[],
+  knotsUnspent: UnspentItem[]
+): SpentMarker[] {
+  const coreNow = new Set(coreUnspent.map((u) => outpointKey(u.tx_hash, u.tx_pos)));
+  const knotsNow = new Set(knotsUnspent.map((u) => outpointKey(u.tx_hash, u.tx_pos)));
+  const seen = new Set<string>();
+  const out: SpentMarker[] = [];
+  const push = (tip: "core" | "knots", txid: string, vout: number) => {
+    const id = `${tip}:${outpointKey(txid, vout)}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push({ tip, txid: txid.toLowerCase(), vout });
+  };
+  for (const row of prior) {
+    if (row.status !== "unspent" && row.status !== "spent") continue;
+    const key = outpointKey(row.txid, row.vout);
+    if (row.tip === "core" && !coreNow.has(key) && knotsNow.has(key)) {
+      push("core", row.txid, row.vout);
+    }
+    if (row.tip === "knots" && !knotsNow.has(key) && coreNow.has(key)) {
+      push("knots", row.txid, row.vout);
+    }
+  }
+  return out;
+}

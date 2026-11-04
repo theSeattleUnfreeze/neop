@@ -96,6 +96,8 @@ describe("outpoint rows", () => {
     );
     const summary = splitSummary(rows);
     assert.equal(summary.replay, 0);
+    assert.equal(summary.coreBound, 1);
+    assert.equal(summary.knotsOnly, 0);
     assert.equal(rows[0].coreBoundOk, true);
   });
 
