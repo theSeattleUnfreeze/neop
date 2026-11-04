@@ -1,6 +1,9 @@
 # Local privacy gate config (copy from .identity.example)
 .identity
 
+# Operator broadcast RPC config (copy from scripts/broadcast-wave.example.json)
+broadcast.json
+
 # Editor / OS
 .DS_Store
 *.swp
