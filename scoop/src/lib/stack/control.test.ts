@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { startBlockReason } from "./control.ts";
+import { diagnoseStack } from "./diagnose.ts";
 import { emptyService } from "./types.ts";
 
 describe("stack control", () => {
@@ -16,5 +17,16 @@ describe("stack control", () => {
     core.binary = "C:\\Bitcoin\\bitcoind.exe";
     core.datadir = "E:\\Bitcoin";
     assert.equal(startBlockReason(core), null);
+  });
+});
+
+describe("stack diagnose", () => {
+  it("diagnoses Core without inventing a Start when paths are empty", async () => {
+    const core = emptyService("core-node", "Core node", "local");
+    const [row] = await diagnoseStack([core]);
+    assert.equal(row.id, "core-node");
+    assert.equal(row.canStart, false);
+    assert.ok(row.steps.length > 0);
+    assert.ok(row.steps.some((step) => /bitcoind|Core|cookie|RPC/i.test(step.title + step.body)));
   });
 });

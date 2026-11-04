@@ -7,6 +7,7 @@ import {
   IceCreamCone,
   LayoutDashboard,
   Server,
+  Stamp,
   Wallet,
 } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
@@ -15,6 +16,7 @@ const NAV = [
   { href: "/", label: "Dashboard", Icon: LayoutDashboard, exact: true },
   { href: "/stack", label: "Stack", Icon: Server },
   { href: "/wallets", label: "Wallets", Icon: Wallet },
+  { href: "/garnish", label: "Garnish", Icon: Stamp },
   { href: "/tasks", label: "Tasks", Icon: ClipboardList },
 ];
 

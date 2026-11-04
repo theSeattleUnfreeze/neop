@@ -1,41 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { StackGlance } from "@/components/StackGlance";
+import { StackRecover, type StackDiagnosisView } from "@/components/StackRecover";
+import { StackServiceEditor } from "@/components/StackServiceEditor";
 import type { StackConfig, StackService, StackServiceId, StackStatusRow } from "@/lib/stack/types";
 
 const LOCAL = { "content-type": "application/json", "x-scoop-local": "1" };
-
-const FIELDS: Record<StackServiceId, { key: keyof StackService; label: string; reveal?: boolean; secret?: boolean }[]> = {
-  "core-node": [
-    { key: "endpoint", label: "RPC URL" },
-    { key: "binary", label: "bitcoind", reveal: true },
-    { key: "datadir", label: "Data directory", reveal: true },
-    { key: "configFile", label: "bitcoin.conf", reveal: true },
-    { key: "cookieFile", label: "Cookie file", reveal: true },
-  ],
-  "core-fulcrum": [
-    { key: "endpoint", label: "Electrum URL" },
-    { key: "datadir", label: "Index directory", reveal: true },
-    { key: "configFile", label: "fulcrum.conf", reveal: true },
-    { key: "cookieFile", label: "Node cookie", reveal: true },
-    { key: "containerName", label: "Docker container" },
-    { key: "image", label: "Docker image" },
-    { key: "publish", label: "Published port" },
-  ],
-  "knots-node": [
-    { key: "endpoint", label: "LAN RPC URL" },
-    { key: "rpcUser", label: "RPC user" },
-    { key: "rpcPassword", label: "RPC password", secret: true },
-  ],
-  "knots-fulcrum": [{ key: "endpoint", label: "Electrum URL" }],
-  "knots-link": [
-    { key: "endpoint", label: "Local RPC URL" },
-    { key: "startosHost", label: "StartOS host" },
-    { key: "script", label: "Tunnel script", reveal: true },
-    { key: "identityFile", label: "SSH identity", reveal: true },
-    { key: "logFile", label: "Log", reveal: true },
-  ],
-};
 
 export function StackManager() {
   const [config, setConfig] = useState<StackConfig | null>(null);
@@ -45,12 +16,21 @@ export function StackManager() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [diagnoses, setDiagnoses] = useState<StackDiagnosisView[]>([]);
+  const [focusId, setFocusId] = useState<StackServiceId | null>(null);
 
   const loadConfig = useCallback(async () => {
     const cfgRes = await fetch("/api/stack/config", { cache: "no-store" });
     const cfgJson = await cfgRes.json();
     if (!cfgRes.ok) throw new Error(cfgJson.error ?? "could not load stack config");
     setConfig(cfgJson.config);
+  }, []);
+
+  const loadDiagnose = useCallback(async () => {
+    const res = await fetch("/api/stack/diagnose", { cache: "no-store" });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? "diagnose failed");
+    setDiagnoses(json.diagnoses ?? []);
   }, []);
 
   const loadStatus = useCallback(async () => {
@@ -61,10 +41,11 @@ export function StackManager() {
       if (!statusRes.ok) throw new Error(statusJson.error ?? "stack status failed");
       setRows(statusJson.rows ?? []);
       setSummary(statusJson.summary ?? "");
+      void loadDiagnose().catch(() => undefined);
     } finally {
       setStatusPending(false);
     }
-  }, []);
+  }, [loadDiagnose]);
 
   useEffect(() => {
     void loadConfig().catch((err) => setError(err instanceof Error ? err.message : String(err)));
@@ -147,82 +128,82 @@ export function StackManager() {
 
   if (!config) return <p className="muted">Loading stack…</p>;
 
+  const focused = focusId ? config.services.find((svc) => svc.id === focusId) : null;
+  const busyIds = new Set(
+    diagnoses.filter((item) => item.severity === "busy").map((item) => item.id)
+  );
+
   return (
     <div className="scoop-stack">
       <section className="scoop-panel">
         <div className="section-head">
           <h2>Stack</h2>
+        </div>
+        {summary ? <p className="banner warn">{summary}</p> : statusPending ? <p className="muted">Checking services…</p> : null}
+        {notice ? <p className="banner ok">{notice}</p> : null}
+        {error ? <p className="banner bad">{error}</p> : null}
+        <StackGlance
+          labels={Object.fromEntries(config.services.map((svc) => [svc.id, svc.label]))}
+          endpoints={Object.fromEntries(config.services.map((svc) => [svc.id, svc.endpoint]))}
+          rows={rows}
+          pending={statusPending}
+          busyIds={busyIds}
+          onSelect={(id) => setFocusId(id)}
+        />
+      </section>
+      {!statusPending ? (
+        <StackRecover
+          diagnoses={diagnoses}
+          busy={busy}
+          onStart={(id) => void control(id, "start")}
+          onReveal={(filePath) => void reveal(filePath)}
+          onApply={(id, key, value) => {
+            patch(id, key, value);
+            setFocusId(id);
+            setNotice(`Filled ${String(key)}. Save in the panel, then Start if needed.`);
+          }}
+          onOpenDetails={(id) => setFocusId(id)}
+        />
+      ) : null}
+      <details className="stack-details">
+        <summary>All service paths</summary>
+        <div className="section-head stack-details-bar">
+          <p className="muted">
+            Locations for every service. Prefer Open Details on a recovery card or a shape above;
+            that opens one service in front of you.
+          </p>
           <button type="button" className="scoop-btn" onClick={() => void save()} disabled={busy}>
             Save paths
           </button>
         </div>
-        <p className="muted">
-          Locations for the node, the indexers, and the files you edit by hand. Start and stop
-          apply to this computer. Knots on StartOS stays a status row.
-        </p>
-        {summary ? <p className="banner warn">{summary}</p> : statusPending ? <p className="muted">Checking services…</p> : null}
-        {notice ? <p className="banner ok">{notice}</p> : null}
-        {error ? <p className="banner bad">{error}</p> : null}
-      </section>
-      {config.services.map((svc) => {
-        const row = rows.find((item) => item.id === svc.id);
-        return (
-          <section key={svc.id} className="scoop-panel">
-            <div className="section-head">
-              <h3>
-                {svc.label}{" "}
-                <span className={`stack-state is-${row?.state ?? "checking"}`}>
-                  {row?.state ?? "checking"}
-                </span>
-              </h3>
-              {svc.control === "local" ? (
-                <span className="stack-actions">
-                  <button type="button" className="scoop-btn" disabled={busy} onClick={() => void control(svc.id, "start")}>
-                    Start
-                  </button>
-                  <button type="button" className="scoop-btn ghost" disabled={busy} onClick={() => void control(svc.id, "stop")}>
-                    Stop
-                  </button>
-                </span>
-              ) : (
-                <span className="muted">Observed</span>
-              )}
-            </div>
-            {row?.detail ? <p className="muted">{row.detail}</p> : statusPending ? <p className="muted">Checking…</p> : null}
-            {FIELDS[svc.id].map((field) => {
-              const value = String(svc[field.key] ?? "");
-              return (
-                <label key={field.key} className="field">
-                  <span>{field.label}</span>
-                  <span className="stack-field-row">
-                    <input
-                      value={value}
-                      spellCheck={false}
-                      type={field.secret ? "password" : "text"}
-                      autoComplete="off"
-                      onChange={(e) => patch(svc.id, field.key, e.target.value)}
-                    />
-                    {field.reveal && value ? (
-                      <button type="button" className="scoop-btn ghost" onClick={() => void reveal(value)}>
-                        Show in Explorer
-                      </button>
-                    ) : null}
-                  </span>
-                </label>
-              );
-            })}
-            {svc.files.map((file, index) => (
-              <div key={`${file.path}-${index}`} className="stack-field-row">
-                <span className="muted">{file.label}</span>
-                <span className="muted">{file.path}</span>
-                <button type="button" className="scoop-btn ghost" onClick={() => void reveal(file.path)}>
-                  Show in Explorer
-                </button>
-              </div>
-            ))}
-          </section>
-        );
-      })}
+        {config.services.map((svc) => (
+          <StackServiceEditor
+            key={svc.id}
+            svc={svc}
+            row={rows.find((item) => item.id === svc.id)}
+            statusPending={statusPending}
+            busy={busy}
+            onPatch={(key, value) => patch(svc.id, key, value)}
+            onReveal={(filePath) => void reveal(filePath)}
+            onControl={(action) => void control(svc.id, action)}
+            onSave={() => void save()}
+          />
+        ))}
+      </details>
+      {focused ? (
+        <StackServiceEditor
+          svc={focused}
+          row={rows.find((item) => item.id === focused.id)}
+          statusPending={statusPending}
+          busy={busy}
+          mode="dialog"
+          onClose={() => setFocusId(null)}
+          onPatch={(key, value) => patch(focused.id, key, value)}
+          onReveal={(filePath) => void reveal(filePath)}
+          onControl={(action) => void control(focused.id, action)}
+          onSave={() => void save()}
+        />
+      ) : null}
     </div>
   );
 }

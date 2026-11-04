@@ -402,12 +402,21 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
 
         {step === "xpub" ? (
           <>
+            <p className="muted">
+              In Sparrow or Shrike, open the wallet and the account <strong>Settings</strong> tab.
+              Copy the <strong>Extended Public Key</strong>, and the derivation path if one is shown.
+              Paste the key below. <strong>File → Export Wallet → Sparrow</strong> writes a{" "}
+              <code>.mv.db</code> database so another Sparrow can open it. Scoop does not read that
+              file. <strong>File → Export Wallet → Electrum</strong> writes a small JSON file this
+              form can open. Scoop keeps the account key. A <code>zpub</code> or <code>ypub</code>{" "}
+              uses its usual path; otherwise paste the derivation path too.
+            </p>
             <label className="field">
-              <span>Sparrow wallet file</span>
+              <span>Older wallet file</span>
               <input type="file" onChange={(e) => void onSparrowFile(e.target.files?.[0])} />
               <span className="muted">
-                Encrypted Sparrow files usually have no extension. The password opens the file in
-                memory. Scoop keeps the account xpub and drops the seed.
+                A JSON wallet, or an encrypted Sparrow file with no extension. The password opens it
+                in memory. Scoop keeps the account xpub and drops the seed.
               </span>
             </label>
             <label className="field">

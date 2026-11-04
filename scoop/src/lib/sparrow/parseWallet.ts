@@ -121,6 +121,11 @@ export async function openSparrowBytes(
   password?: string,
   derive: DeriveKey = defaultDerive
 ): Promise<unknown> {
+  if (bytes.subarray(0, 3).toString("utf8") === "H:2") {
+    throw new Error(
+      "File → Export Wallet → Sparrow writes a .mv.db database, which Scoop cannot read yet. Open the wallet, go to Settings, and copy the account Extended Public Key into Scoop."
+    );
+  }
   const header = sparrowHeader(bytes);
   if (!header.encrypted) {
     return JSON.parse(bytes.toString("utf8")) as unknown;

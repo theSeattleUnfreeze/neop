@@ -48,6 +48,13 @@ describe("sparrow wallet file", () => {
     assert.notEqual(createHash("sha256").update(file).digest("hex"), createHash("sha256").update(body).digest("hex"));
   });
 
+  it("rejects a Sparrow H2 database without reading it as JSON", async () => {
+    await assert.rejects(
+      inspectSparrowWallet(Buffer.from("H:2,block:1,blockSize:1000")),
+      /mv\.db/
+    );
+  });
+
   it("asks for a password when the header is SPRW1", async () => {
     const priv = Buffer.alloc(32, 0x11);
     const file = sealSparrowForTest("{}", priv, Buffer.alloc(32, 0x44), Buffer.alloc(16, 1));

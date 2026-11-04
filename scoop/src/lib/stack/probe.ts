@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import net from "node:net";
 import { ElectrumClient, electrumTlsRejectUnauthorized } from "@/lib/electrum/client";
 import type { StackConfig, StackService, StackStatusRow } from "@/lib/stack/types";
 import { summarizeStack } from "@/lib/stack/summarize";
@@ -177,7 +178,52 @@ async function probeRpc(svc: StackService): Promise<Pick<StackStatusRow, "state"
   }
   if (settled.fallback) return rpcFromResponse(settled.fallback);
   if (settled.redirect) return rpcFromResponse(settled.redirect);
+  const open = await endpointTcpOpen(svc.endpoint);
+  if (open) {
+    return {
+      state: "down",
+      height: null,
+      headers: null,
+      detail: "Port is open; RPC timed out (node may be syncing).",
+    };
+  }
   return { state: "down", height: null, headers: null, detail: settled.error };
+}
+
+function endpointTcpOpen(endpoint: string): Promise<boolean> {
+  try {
+    let host = "";
+    let port = 0;
+    if (endpoint.startsWith("tcp://") || endpoint.startsWith("ssl://") || endpoint.startsWith("tls://")) {
+      const rest = endpoint.replace(/^(tcp|ssl|tls):\/\//, "");
+      const parts = rest.split(":");
+      host = parts[0] ?? "";
+      port = Number(parts[1]);
+    } else {
+      const url = new URL(endpoint);
+      host = url.hostname;
+      port = Number(url.port || (url.protocol === "https:" ? 443 : 80));
+    }
+    if (!host || !Number.isFinite(port)) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const sock = net.connect({ host, port });
+      const timer = setTimeout(() => {
+        sock.destroy();
+        resolve(false);
+      }, 1200);
+      sock.on("connect", () => {
+        clearTimeout(timer);
+        sock.end();
+        resolve(true);
+      });
+      sock.on("error", () => {
+        clearTimeout(timer);
+        resolve(false);
+      });
+    });
+  } catch {
+    return Promise.resolve(false);
+  }
 }
 
 async function probeElectrum(
@@ -200,11 +246,13 @@ async function probeElectrum(
       detail: height != null ? `${banner} tip ${height.toLocaleString()}` : banner,
     };
   } catch (err) {
+    const open = await endpointTcpOpen(svc.endpoint);
+    const message = err instanceof Error ? err.message : String(err);
     return {
       state: "down",
       height: null,
       headers: null,
-      detail: err instanceof Error ? err.message : String(err),
+      detail: open ? "Port is open; Electrum timed out (often waiting on bitcoind)." : message,
     };
   } finally {
     client.close();
@@ -244,7 +292,7 @@ function withDeadline<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> 
 }
 
 async function probeOne(svc: StackService): Promise<StackStatusRow> {
-  const probed = await withDeadline(
+  let probed = await withDeadline(
     svc.id === "core-fulcrum" || svc.id === "knots-fulcrum"
       ? probeElectrum(svc)
       : svc.id === "knots-link"
@@ -253,6 +301,18 @@ async function probeOne(svc: StackService): Promise<StackStatusRow> {
     PROBE_MS,
     TIMED_OUT
   );
+  if (probed.detail === "Timed out." && svc.endpoint) {
+    const open = await endpointTcpOpen(svc.endpoint);
+    if (open) {
+      probed = {
+        ...probed,
+        detail:
+          svc.id === "core-fulcrum" || svc.id === "knots-fulcrum"
+            ? "Port is open; Electrum timed out (often waiting on bitcoind)."
+            : "Port is open; RPC timed out (node may be syncing).",
+      };
+    }
+  }
   return {
     id: svc.id,
     label: svc.label,
