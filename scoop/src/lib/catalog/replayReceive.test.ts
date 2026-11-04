@@ -5,6 +5,7 @@ import {
   isReplayReceive,
   outpointKey,
   persistedSpentMarkers,
+  spentMarkersFromOutpoints,
   replayDedupeKey,
   shouldCreateReplayAlert,
 } from "./replayReceive.ts";
@@ -75,6 +76,21 @@ describe("replayReceive", () => {
     );
     assert.deepEqual(again, [{ tip: "core", txid, vout: 0 }]);
     assert.deepEqual(persistedSpentMarkers(prior, [], []), []);
+  });
+
+  it("reads a Core spend from the live catalog without a prior row", () => {
+    const txid = "dd".repeat(32);
+    assert.deepEqual(
+      spentMarkersFromOutpoints([
+        {
+          txid,
+          vout: 1,
+          core: { status: "spent" },
+          knots: { status: "unspent" },
+        },
+      ]),
+      [{ tip: "core", txid, vout: 1 }]
+    );
   });
 
   it("skips alerts on bootstrap sync (empty prior)", () => {

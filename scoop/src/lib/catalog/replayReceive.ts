@@ -103,6 +103,22 @@ export type SpentMarker = {
  * Remember an outpoint that left one tip and is still unspent on the other.
  * Sync replaces a tip's rows, so a spent marker from the previous sync has to be written again.
  */
+/** Spent side of an outpoint the other tip still holds, taken from the live catalog. */
+export function spentMarkersFromOutpoints(
+  rows: { txid: string; vout: number; core: { status: string }; knots: { status: string } }[]
+): SpentMarker[] {
+  const out: SpentMarker[] = [];
+  for (const row of rows) {
+    if (row.core.status === "spent" && row.knots.status === "unspent") {
+      out.push({ tip: "core", txid: row.txid.toLowerCase(), vout: row.vout });
+    }
+    if (row.knots.status === "spent" && row.core.status === "unspent") {
+      out.push({ tip: "knots", txid: row.txid.toLowerCase(), vout: row.vout });
+    }
+  }
+  return out;
+}
+
 export function persistedSpentMarkers(
   prior: PriorTipOutpoint[],
   coreUnspent: UnspentItem[],
