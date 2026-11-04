@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { localOnly } from "@/lib/api/localOnly";
 import { inspectSparrowWallet } from "@/lib/sparrow/parseWallet";
 
 export const runtime = "nodejs";
@@ -7,6 +8,8 @@ export const dynamic = "force-dynamic";
 const MAX_BYTES = 8 * 1024 * 1024;
 
 export async function POST(req: Request) {
+  const denied = localOnly(req);
+  if (denied) return denied;
   let body: { fileBase64?: string; password?: string };
   try {
     body = (await req.json()) as { fileBase64?: string; password?: string };

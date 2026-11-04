@@ -206,7 +206,7 @@ export function splitSummary(
       unclassified += 1;
       continue;
     }
-    if (row.replayRisk || row.presence === "both") replay += 1;
+    if (row.replayRisk) replay += 1;
     else if (row.presence === "knots_only") knotsOnly += 1;
     else if (row.presence === "core_only") coreOnly += 1;
   }

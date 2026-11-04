@@ -20,7 +20,7 @@ export function StackManager() {
   const [focusId, setFocusId] = useState<StackServiceId | null>(null);
 
   const loadConfig = useCallback(async () => {
-    const cfgRes = await fetch("/api/stack/config", { cache: "no-store" });
+    const cfgRes = await fetch("/api/stack/config", { cache: "no-store", headers: LOCAL });
     const cfgJson = await cfgRes.json();
     if (!cfgRes.ok) throw new Error(cfgJson.error ?? "could not load stack config");
     setConfig(cfgJson.config);

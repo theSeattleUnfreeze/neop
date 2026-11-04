@@ -247,7 +247,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     try {
       const res = await fetch("/api/sparrow/inspect", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-scoop-local": "1" },
         body: JSON.stringify({ fileBase64, password: password || undefined }),
       });
       const json = await res.json();
