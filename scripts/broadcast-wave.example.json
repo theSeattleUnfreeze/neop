@@ -1,0 +1,14 @@
+{
+  "socks": "127.0.0.1:9150",
+  "core": {
+    "url": "https://ONION.onion/",
+    "user": "rpcuser",
+    "password": "rpcpassword",
+    "tlsInsecure": true
+  },
+  "knots": {
+    "url": "https://LAN-KNOTS:57747/",
+    "cookieFile": "C:/path/to/knots/.cookie",
+    "tlsInsecure": true
+  }
+}

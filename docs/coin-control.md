@@ -45,6 +45,8 @@ Scoop does not choose the inputs, the destinations, or the signatures. For a sam
 
 A signature commits to the outputs. Scoop refuses a PSBT that is already signed, and it refuses a PSBT with more than one input. The garnish is temporary: it works while Knots still rejects an `OP_RETURN` script longer than 83 bytes, through **2027-09-01**. Core itself must accept that output. Bitcoin Core 28’s default datacarrier limit is 83 bytes, so the Core node needs a higher `datacarriersize` before it will relay the transaction. The scriptPubKey stays within 84 to 120 bytes. Across one drop, Scoop rotates raw bytes, a text memo, hex text, and an OP_RETURN of several pushes. There is no shared string. Set Core `datacarriersize` to at least 120 before relay. Bitcoin Core 28’s default limit is 83.
 
+When both families are signed, [scripts/BROADCAST-WAVE.md](../scripts/BROADCAST-WAVE.md) sends Core first and sends Knots only after every Core transaction has a confirmation. A Core file without the long `OP_RETURN` is allowed only when its inputs are already gone from Knots. One failed check sends nothing.
+
 ## One wave, and the privacy cost
 
 Loss prevention and chain privacy pull apart the moment a script is going to be spent.
