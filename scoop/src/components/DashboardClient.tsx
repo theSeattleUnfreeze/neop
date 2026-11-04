@@ -190,7 +190,7 @@ export function DashboardClient() {
               <strong>{BigInt(dash.portfolio.knotsSats).toLocaleString()} sats</strong>
             </div>
             <div>
-              <span className="muted">Both / spills</span>
+              <span className="muted">Replay outpoints / spills</span>
               <strong>
                 {dash.portfolio.bothCount} / {dash.portfolio.spillCount}
               </strong>

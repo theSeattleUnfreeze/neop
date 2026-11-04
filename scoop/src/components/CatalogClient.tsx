@@ -3,9 +3,9 @@
 import { useCallback, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { CoinTable } from "@/components/CoinTable";
-import type { annotate } from "@/lib/catalog/presence";
+import type { OutpointRow } from "@/lib/catalog/outpoints";
 
-type Row = ReturnType<typeof annotate>;
+type Row = OutpointRow;
 
 type Props = {
   mode: "neapolitan" | "core" | "knots" | "spills";

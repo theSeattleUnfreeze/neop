@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { aggregateAccountBalances } from "@/lib/catalog/balances";
-import { coinRowFromTips } from "@/lib/sync/buildRows";
+import { outpointRowsFromTips, witnessFromTips } from "@/lib/catalog/outpoints";
 import { envElectrumUrls, fetchScriptTip } from "@/lib/sync/fetchTip";
 import {
   applyReplayReceiveSync,
@@ -53,11 +53,15 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
       ? await fetchScriptTip("knots", urls.shulcrum, s.electrumScripthash)
       : undefined;
     rows.push(
-      coinRowFromTips(s.id, s.address, core, knots, {
+      ...outpointRowsFromTips(s.id, s.address, core, knots, {
         accountId: s.accountId,
         watchAccountId: s.accountId,
       })
     );
+    await db
+      .update(watchedScripts)
+      .set({ witnessState: witnessFromTips(core, knots) })
+      .where(eq(watchedScripts.id, s.id));
     if (core && !core.ok) health.fulcrumError = core.error ?? "fulcrum error";
     if (knots && !knots.ok) health.shulcrumError = knots.error ?? "shulcrum error";
 

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { CoinTable } from "@/components/CoinTable";
-import type { annotate, CatalogFilter } from "@/lib/catalog/presence";
+import { SplitChecklist } from "@/components/SplitChecklist";
+import type { CatalogFilter } from "@/lib/catalog/presence";
+import type { OutpointRow } from "@/lib/catalog/outpoints";
 
 type Props = { id: number };
 
@@ -31,11 +33,14 @@ type Health = {
   shulcrumError?: string | null;
 };
 
-type Row = ReturnType<typeof annotate>;
+type Row = OutpointRow;
+
+type ScriptWitness = { id: number; witnessState?: string | null };
 
 export function AccountDetailClient({ id }: Props) {
   const [account, setAccount] = useState<Account | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
+  const [scripts, setScripts] = useState<ScriptWitness[]>([]);
   const [balance, setBalance] = useState<Balance | null>(null);
   const [health, setHealth] = useState<Health>({});
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +59,7 @@ export function AccountDetailClient({ id }: Props) {
     }
     setAccount(json.account);
     setRows(json.rows ?? []);
+    setScripts(json.scripts ?? []);
     setBalance(json.balance ?? null);
     return json.account as Account;
   }, [id]);
@@ -130,6 +136,7 @@ export function AccountDetailClient({ id }: Props) {
 
   const FILTERS: { id: CatalogFilter; label: string }[] = [
     { id: "all", label: "All" },
+    { id: "replay", label: "Needs split" },
     { id: "core", label: "Core" },
     { id: "knots", label: "Knots" },
     { id: "spills", label: "Spills" },
@@ -161,7 +168,7 @@ export function AccountDetailClient({ id }: Props) {
               <strong>{BigInt(balance.knotsSats).toLocaleString()} sats</strong>
             </div>
             <div>
-              <span className="muted">Both</span>
+              <span className="muted">Replay outpoints</span>
               <strong>{balance.bothCount}</strong>
             </div>
           </div>
@@ -218,9 +225,11 @@ export function AccountDetailClient({ id }: Props) {
       </section>
 
       {account.source === "electrum" ? (
+        <>
+        <SplitChecklist rows={rows} scripts={scripts} />
         <section className="scoop-panel">
           <div className="section-head">
-            <h3>Addresses</h3>
+            <h3>Outpoints</h3>
           </div>
           <div className="filter-row" role="tablist" aria-label="Tip filter">
             {FILTERS.map((f) => (
@@ -236,10 +245,12 @@ export function AccountDetailClient({ id }: Props) {
           </div>
           <CoinTable rows={rows} filter={filter} />
           <p className="muted">
-            All / Core / Knots / Spills filter this table — they do not change page. Core uses
-            Fulcrum; Knots uses your Blake2b Electrum. Shrike only sees Knots.
+            Needs split shows outpoints unspent on both chains. Mixed on the address above them is
+            not replay risk. Core uses Fulcrum; Knots uses your Blake2b Electrum. Shrike only sees
+            Knots.
           </p>
         </section>
+        </>
       ) : null}
     </div>
   );

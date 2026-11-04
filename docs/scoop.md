@@ -13,6 +13,7 @@ Electrum servers (`FULCRUM_URL` / `SHULCRUM_URL`) and stores results in local Po
 - In-repo digest: [lightning.md](lightning.md)
 
 Wallet UTXO split doctrine (taint first; OP_RETURN RDTS garnish only): [replay.md](replay.md).
+Outpoint catalog, mixed addresses, and the Coldcard multisig exit: [coin-control.md](coin-control.md).
 
 Default **testnet4** examples use `:15001` / `:15011`. For **mainnet** presets (self-hosted Linux
 `50001`/`50002`, StartOS dynamic SSL, Umbrel), see [electrum.md](electrum.md#hosting-presets-scoop--wallets).
@@ -21,11 +22,14 @@ Default **testnet4** examples use `:15001` / `:15011`. For **mainnet** presets (
 
 Scoop sits next to your own Core / Knots engines — same trust boundary as Sparrow/Shrike → your node.
 
+Wallet files, seeds, xprvs, xpubs, descriptors, addresses, and master fingerprints stay on this machine. That is the default for humans and for coding agents. Nobody should have to repeat it in a prompt.
+
 - **Operator-owned runtime** — no SaaS, no hosted Scoop, no telemetry
 - **Default bind `127.0.0.1:3847`** — do not expose without auth (v1 has none)
-- **Local Electrum only** — `FULCRUM_URL` / `SHULCRUM_URL` point at your Fulcrum / Shulcrum
+- **Local Electrum only** — `FULCRUM_URL` / `SHULCRUM_URL` point at your Fulcrum / Shulcrum. Do not retarget them at a public server while a real wallet is loaded
 - **No private keys** — notes may describe wallet locations; keep them on this host
-- Postgres holds xpubs/scripthashes/notes — treat the DB as sensitive
+- **No exfiltration** — do not send wallet material to hosted APIs, block explorers, issue trackers, pull requests, commits, logs, or chat. A format check may report the file type and whether a public key was found. It does not print the key, the addresses, or the seed
+- Postgres holds xpubs/scripthashes/notes — treat the DB as sensitive. Do not commit it or `~/.neop/stack.json`
 
 ### Install matrix
 
@@ -94,17 +98,33 @@ A **wallet** in Scoop is an xpub plus derivation path (a collection of addresses
 **account** can later group several wallets. Coins live at addresses; we watch those
 addresses on both tips.
 
-### Least lift: paste the xpub
+### Least lift: copy the account xpub
 
-1. In **Sparrow** / **Shrike**: open the wallet → copy the **account Extended Public Key**
-   (Settings / wallet settings → Copy Extended Public Key — `zpub` / `ypub` / `xpub`).
-   Or, in Scoop, choose **Sparrow wallet file** and pick the wallet file. An encrypted file
-   needs the Sparrow password. Scoop keeps the account xpub and drops the seed.
-2. Scoop → **Wallets** → **+ Add a wallet** (the form is already open if you have none yet).
-3. Choose **Entire wallet**, paste the xpub, then Next. Derivation path is optional.
-4. Scoop checks the first **50** receive addresses. If none have history, it asks you to raise
+**File → Export Wallet → Sparrow** writes a `.mv.db` file. That is Sparrow's H2 database, the same
+file you copy when you move a wallet to another Sparrow. Scoop does not read it. The database is a
+page store of Java records, not the JSON wallet text Scoop parses, and it can hold the seed.
+
+Use the account public key instead:
+
+1. In **Sparrow** or **Shrike**, open the wallet.
+2. Open the account **Settings** tab.
+3. Copy the **Extended Public Key** (`zpub` / `ypub` / `xpub`). If a derivation path is shown, copy
+   that too.
+4. Scoop → **Wallets** → **+ Add a wallet** (the form is already open if you have none yet).
+5. Choose **Entire wallet**, paste the key, and paste the path if you copied one.
+
+The same steps are on that Scoop form. Parsing and storage stay on this machine.
+
+An older **JSON** wallet, or an **encrypted Sparrow file** (SPRW1, often with no extension), can
+still be opened with the file control. **File → Export Wallet → Electrum** is that kind of file:
+Scoop reads the account key from it. Electrum names the path `derivation` and the fingerprint
+`root_fingerprint`, which Scoop does not copy. A `zpub` or `ypub` still follows its usual account
+path. For any other prefix, paste the derivation path from the file. The password field is only for
+an encrypted Sparrow file. Scoop keeps the account xpub and drops the seed. A `.mv.db` dropped on
+that control is rejected with the Settings steps above.
+6. Scoop checks the first **50** receive addresses. If none have history, it asks you to raise
    that count (large gap) or double-check the key.
-5. Add wallet. Scoop syncs Electrum automatically and opens the wallet as an address table.
+7. Add wallet. Scoop syncs Electrum automatically and opens the wallet as an address table.
 
 **Viewing coins:** open the wallet. Filter chips **All / Core / Knots / Spills** hide rows; they are not separate pages.
 
@@ -173,4 +193,4 @@ Notifications are **in-app only** (on sync / page load). No email or push in v1.
 ## Status
 
 Organizer schema, dashboard, tasks, and replay-receive detection ship under `scoop/`.
-Postgres is required. Open a wallet to see the dual-tip address table.
+Postgres is required. Open a wallet to see one row per outpoint, grouped under the address. A mixed group is not replay risk. Replay is the outpoint unspent on both tips.

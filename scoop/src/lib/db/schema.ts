@@ -59,6 +59,8 @@ export const watchedScripts = pgTable(
     scriptPubKeyHex: text("script_pubkey_hex"),
     electrumScripthash: text("electrum_scripthash").notNull(),
     path: text("path"),
+    /** hashed | published | unknown. Set on sync. Not replay risk. */
+    witnessState: text("witness_state"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("watched_scripts_scripthash_uidx").on(t.electrumScripthash)]

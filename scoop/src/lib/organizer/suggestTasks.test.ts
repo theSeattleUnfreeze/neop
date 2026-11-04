@@ -50,17 +50,16 @@ describe("suggestTasks", () => {
     assert.ok(tasks.some((t) => t.kind === "auto_core_bound"));
   });
 
-  it("dedupes keys stably per script", () => {
+  it("does not treat different outpoints on one address as replay risk", () => {
     const row = {
       ...annotate({
         scriptId: 9,
         address: "x",
-        core: { status: "unspent", valueSats: 1n, txid: "a", vout: 0 },
-        knots: { status: "unspent", valueSats: 1n, txid: "b", vout: 1 },
+        core: { status: "unspent", valueSats: 1n, txid: "aa", vout: 0 },
+        knots: { status: "unspent", valueSats: 1n, txid: "bb", vout: 1 },
       }),
     };
-    const a = suggestTasksFromRows([row]);
-    const b = suggestTasksFromRows([row]);
-    assert.equal(a[0].dedupeKey, b[0].dedupeKey);
+    const tasks = suggestTasksFromRows([row]);
+    assert.equal(tasks.length, 0);
   });
 });
