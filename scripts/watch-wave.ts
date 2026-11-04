@@ -15,6 +15,7 @@ import { connect as tlsConnect, type TLSSocket } from "node:tls";
 import type { Socket } from "node:net";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { httpHost, tlsRejectUnauthorized, tlsServerName } from "../scoop/src/lib/broadcast/wave.ts";
 import {
   blockGapOdds,
   feeRateSatPerVbyte,
@@ -152,8 +153,8 @@ function openRpc(endpoint: Endpoint, label: string, socks?: string): Rpc {
         url.protocol === "https:"
           ? tlsConnect({
               socket: raw,
-              servername: isIP(url.hostname) ? undefined : url.hostname,
-              rejectUnauthorized: endpoint.tlsInsecure === false,
+              servername: tlsServerName(url.hostname, isIP(url.hostname)),
+              rejectUnauthorized: tlsRejectUnauthorized(endpoint.tlsInsecure),
             })
           : raw;
       if (url.protocol === "https:") {
@@ -162,7 +163,7 @@ function openRpc(endpoint: Endpoint, label: string, socks?: string): Rpc {
           socket.once("error", reject);
         });
       }
-      const hostHeader = url.port ? `${url.hostname}:${url.port}` : url.hostname;
+      const hostHeader = httpHost(url.hostname, url.port, isIP(url.hostname));
       const req =
         `POST ${url.pathname || "/"} HTTP/1.1\r\n` +
         `Host: ${hostHeader}\r\n` +
@@ -507,6 +508,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message.replace(/[0-9a-fA-F]{16,}/g, "…").slice(0, 160));
   process.exit(1);
 });

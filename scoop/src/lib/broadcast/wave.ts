@@ -174,8 +174,57 @@ export function mayBroadcast(localErrors: string[], verdicts: MempoolVerdict[]):
 }
 
 /** Footer when the broadcast script aborts from an unexpected error. */
-export function broadcastAbortFooter(sendKnots: boolean, coreAlreadySent: boolean): string {
-  if (sendKnots) return "Knots not sent.";
-  if (coreAlreadySent) return "Knots not sent.";
+export function broadcastAbortFooter(sendKnots: boolean, coreAlreadySent: boolean, knotsAlreadySent = false): string {
+  if (knotsAlreadySent) return "Knots broadcast already started.";
+  if (sendKnots || coreAlreadySent) return "Knots not sent.";
   return "Nothing sent.";
+}
+
+export type TxOutView = "present" | "absent" | "unusable";
+
+/** gettxout: an object is still in the set, JSON null is missing, anything else is not a proof. */
+export function readTxOut(result: unknown): TxOutView {
+  if (result === null) return "absent";
+  if (typeof result === "object") return "present";
+  return "unusable";
+}
+
+/** True when getblockchaininfo says this node has finished initial block download. */
+export function chainTipReady(info: unknown): boolean {
+  if (!info || typeof info !== "object") return false;
+  const rec = info as { initialblockdownload?: unknown; blocks?: unknown };
+  return rec.initialblockdownload === false && typeof rec.blocks === "number" && Number.isFinite(rec.blocks) && rec.blocks > 0;
+}
+
+/**
+ * A missing gettxout is "gone" only on a finished tip.
+ * A present output is still there. A syncing node, or a result that is not null, is not proof.
+ */
+export function outputGone(tipReady: boolean, view: TxOutView): boolean | null {
+  if (view === "present") return false;
+  if (!tipReady || view === "unusable") return null;
+  return true;
+}
+
+/** Same genesis, 64 hex characters. Core and Knots of one network share block 0. */
+export function sameNetwork(coreGenesis: unknown, knotsGenesis: unknown): boolean {
+  if (typeof coreGenesis !== "string" || typeof knotsGenesis !== "string") return false;
+  if (!/^[0-9a-fA-F]{64}$/.test(coreGenesis) || !/^[0-9a-fA-F]{64}$/.test(knotsGenesis)) return false;
+  return coreGenesis.toLowerCase() === knotsGenesis.toLowerCase();
+}
+
+/** Bracket an IPv6 literal in the HTTP Host header. ipVersion is Node's isIP result. */
+export function httpHost(hostname: string, port: string, ipVersion: number): string {
+  const host = ipVersion === 6 ? `[${hostname}]` : hostname;
+  return port ? `${host}:${port}` : host;
+}
+
+/** Omit TLS servername for an IP. A hostname keeps servername. */
+export function tlsServerName(hostname: string, ipVersion: number): string | undefined {
+  return ipVersion === 0 ? hostname : undefined;
+}
+
+/** Check the certificate unless the config explicitly sets tlsInsecure. */
+export function tlsRejectUnauthorized(tlsInsecure: boolean | undefined): boolean {
+  return tlsInsecure !== true;
 }

@@ -12,14 +12,22 @@ import { connect as tlsConnect, type TLSSocket } from "node:tls";
 import type { Socket } from "node:net";
 import { fileURLToPath } from "node:url";
 import {
+  chainTipReady,
   coreProblems,
   hasCoreWedge,
+  httpHost,
   jitterMs,
   knotsAfterCoreProblems,
   broadcastAbortFooter,
   mayBroadcast,
+  outputGone,
   readMempoolAccept,
+  readTxOut,
+  sameNetwork,
+  tlsRejectUnauthorized,
+  tlsServerName,
   type MempoolVerdict,
+  type TxOutView,
 } from "../scoop/src/lib/broadcast/wave.ts";
 import { garnishUnsignedPsbt, nextWedge, wedgeCycleStart } from "../scoop/src/lib/psbt/garnish.ts";
 
@@ -58,6 +66,8 @@ type Rpc = {
 const args = process.argv.slice(2);
 /** Set after the first successful Core sendrawtransaction (partial batch counts). */
 let coreAlreadySent = false;
+/** Set after the first successful Knots sendrawtransaction (partial batch counts). */
+let knotsAlreadySent = false;
 
 function flag(name: string): string | undefined {
   const i = args.indexOf(name);
@@ -319,8 +329,8 @@ function openRpc(endpoint: Endpoint, label: string, socks?: string): Promise<Rpc
       url.protocol === "https:"
         ? tlsConnect({
             socket: raw,
-            servername: isIP(url.hostname) ? undefined : url.hostname,
-            rejectUnauthorized: endpoint.tlsInsecure === false,
+            servername: tlsServerName(url.hostname, isIP(url.hostname)),
+            rejectUnauthorized: tlsRejectUnauthorized(endpoint.tlsInsecure),
           })
         : raw;
     socket.setTimeout(25_000, () => socket.destroy(new Error("Core connection timed out")));
@@ -330,10 +340,10 @@ function openRpc(endpoint: Endpoint, label: string, socks?: string): Promise<Rpc
         socket.once("error", reject);
       });
     }
-    const hostHeader = url.port ? `${url.hostname}:${url.port}` : url.hostname;
+    const host = httpHost(url.hostname, url.port, isIP(url.hostname));
     const req =
       `POST ${url.pathname || "/"} HTTP/1.1\r\n` +
-      `Host: ${hostHeader}\r\n` +
+      `Host: ${host}\r\n` +
       `Authorization: Basic ${header}\r\n` +
       `Content-Type: application/json\r\n` +
       `Content-Length: ${Buffer.byteLength(body)}\r\n` +
@@ -395,31 +405,40 @@ async function sendChain(
       return;
     }
     try {
-      await rpc.call("sendrawtransaction", [rows[i].hex]);
+      await rpc.call("sendrawtransaction", [rows[i].hex, 0]);
       if (label === "core") coreAlreadySent = true;
+      if (label === "knots") knotsAlreadySent = true;
       sent.push(`${label} ${rows[i].name}`);
       console.log(`${label} ${rows[i].name} sent`);
     } catch (err) {
       state.stop = true;
       const reason = safeRejectReason(err instanceof Error ? err.message : String(err));
       console.error(`${label} ${rows[i].name} rejected: ${reason}`);
-      notSent.push(...rows.slice(i + 1).map((row) => `${label} ${row.name}`));
+      notSent.push(`${label} ${rows[i].name}`, ...rows.slice(i + 1).map((row) => `${label} ${row.name}`));
       return;
     }
   }
 }
 
-async function outputUnspent(rpc: Rpc, point: SpentPoint, includeMempool = true): Promise<boolean | null> {
+async function txOutView(rpc: Rpc, point: SpentPoint, includeMempool: boolean): Promise<TxOutView> {
   try {
-    const result = await rpc.call("gettxout", [point.txid, point.vout, includeMempool]);
-    return Boolean(result && typeof result === "object");
+    return readTxOut(await rpc.call("gettxout", [point.txid, point.vout, includeMempool]));
   } catch {
-    return null;
+    return "unusable";
+  }
+}
+
+async function tipIsReady(rpc: Rpc): Promise<boolean> {
+  try {
+    return chainTipReady(await rpc.call("getblockchaininfo", []));
+  } catch {
+    return false;
   }
 }
 
 async function chainErrors(core: Ready[], knots: Ready[], knotsRpc: Rpc): Promise<string[]> {
   const errors: string[] = [];
+  if (!(await tipIsReady(knotsRpc))) return ["Knots is still syncing."];
   const knotsPoints = new Map<string, number>();
   for (const row of knots) {
     if (row.inputs.length !== 1) {
@@ -438,11 +457,12 @@ async function chainErrors(core: Ready[], knots: Ready[], knotsRpc: Rpc): Promis
       const key = pointKey(point);
       if (corePoints.has(key)) errors.push(`${row.name}: duplicate Core input`);
       corePoints.add(key);
-      const unspent = await outputUnspent(knotsRpc, point);
-      if (unspent === null) {
+      const gone = outputGone(true, await txOutView(knotsRpc, point, true));
+      if (gone === null) {
         errors.push(`${row.name}: Knots UTXO check failed`);
         continue;
       }
+      const unspent = !gone;
       if (!row.wedge && unspent) {
         errors.push(`${row.name}: no OP_RETURN, and the input is still unspent on Knots`);
       }
@@ -497,13 +517,13 @@ async function stillInMempool(rpc: Rpc, txid: string): Promise<boolean | null> {
 
 /** True when every input is already spent in a Core block. Null means the lookup failed. */
 async function spentOnChain(rpc: Rpc, rows: Ready[]): Promise<boolean | null> {
+  if (!(await tipIsReady(rpc))) return null;
   if (rows.length === 0) return false;
   for (const row of rows) {
     if (row.inputs.length === 0) return false;
     for (const point of row.inputs) {
-      const unspent = await outputUnspent(rpc, point, false);
-      if (unspent === null) return null;
-      if (unspent) return false;
+      const gone = outputGone(true, await txOutView(rpc, point, false));
+      if (gone !== true) return gone;
     }
   }
   return true;
@@ -531,8 +551,8 @@ async function waitForCoreConfirmations(
           if (confirmed.has(row.txid)) continue;
           let allSpent = row.inputs.length > 0;
           for (const point of row.inputs) {
-            const unspent = await outputUnspent(rpc, point, false);
-            if (unspent !== false) allSpent = false;
+            const gone = outputGone(true, await txOutView(rpc, point, false));
+            if (gone !== true) allSpent = false;
           }
           if (allSpent) conflict = true;
         }
@@ -662,6 +682,10 @@ async function preflightQuiet(dir: string) {
   const configPath = flag("--config") || join(homedir(), ".neop", "broadcast.json");
   const config = loadConfig(configPath);
   const rpc = await openRpc(config.core, "Core", config.socks || "127.0.0.1:9150");
+  if (!(await tipIsReady(rpc))) {
+    console.error("Core is still syncing. Nothing sent.");
+    process.exit(1);
+  }
   const rejects = new Map<string, number>();
   let allowed = 0;
   for (const row of ready) {
@@ -720,7 +744,7 @@ async function main() {
     console.error("Usage: node scripts/broadcast-wave.mjs --check");
     console.error("       node scripts/broadcast-wave.mjs --garnish --core-dir PATH");
     console.error("       node scripts/broadcast-wave.mjs --preflight --core-dir PATH");
-    console.error("       node scripts/broadcast-wave.mjs --core-dir PATH --knots-dir PATH [--send] [--config PATH]");
+    console.error("       node scripts/broadcast-wave.mjs --core-dir PATH --knots-dir PATH [--send | --send-knots] [--config PATH]");
     process.exit(2);
   }
   const core = loadDir(resolve(coreDir), "core");
@@ -728,7 +752,7 @@ async function main() {
   const localErrors = [...core.errors, ...knots.errors];
   for (const error of localErrors) console.error(safeRejectReason(error));
   if (localErrors.length) {
-    console.error("Nothing sent.");
+    console.error(args.includes("--send-knots") ? "Knots not sent." : "Nothing sent.");
     process.exit(1);
   }
   console.log(`Core files ${core.ready.length} (${core.ready.filter((row) => row.wedge).length} with OP_RETURN)`);
@@ -741,18 +765,35 @@ async function main() {
   const coreRpc = await openRpc(config.core, "Core", socks);
   const knotsRpc = await openRpc(config.knots, "Knots");
   const localCore = sendKnots ? await localConfirmRpc() : null;
+  const proofRpc = sendKnots && localCore ? localCore : coreRpc;
+  let coreReady = false;
+  let knotsReady = false;
   try {
-    if (!localCore) await coreRpc.call("getblockcount", []);
-    await knotsRpc.call("getblockcount", []);
+    coreReady = chainTipReady(await proofRpc.call("getblockchaininfo", []));
+    knotsReady = chainTipReady(await knotsRpc.call("getblockchaininfo", []));
+    const coreGenesis = await proofRpc.call("getblockhash", [0]);
+    const knotsGenesis = await knotsRpc.call("getblockhash", [0]);
+    if (!sameNetwork(coreGenesis, knotsGenesis)) {
+      console.error(sendKnots ? "Core and Knots are not the same network. Knots not sent." : "Core and Knots are not the same network. Nothing sent.");
+      process.exit(1);
+    }
   } catch (err) {
     console.error(safeRejectReason(err instanceof Error ? err.message : String(err)));
-    console.error("Nothing sent.");
+    console.error(sendKnots ? "Knots not sent." : "Nothing sent.");
+    process.exit(1);
+  }
+  if (!knotsReady) {
+    console.error(sendKnots ? "Knots is still syncing. Knots not sent." : "Knots is still syncing. Nothing sent.");
+    process.exit(1);
+  }
+  if (!coreReady) {
+    console.error(sendKnots ? "Core is still syncing. Knots not sent." : "Core is still syncing. Nothing sent.");
     process.exit(1);
   }
   const presenceErrors = await chainErrors(core.ready, knots.ready, knotsRpc);
   for (const error of presenceErrors) console.error(error);
   if (presenceErrors.length) {
-    console.error("Nothing sent.");
+    console.error(sendKnots ? "Knots not sent." : "Nothing sent.");
     process.exit(1);
   }
   if (sendKnots) {
@@ -779,6 +820,11 @@ async function main() {
     if (!againGate.ok) {
       for (const error of again.errors) console.error(safeRejectReason(error));
       console.error(`Core is confirmed. Knots not sent. ${safeRejectReason(againGate.reason)}`);
+      process.exit(1);
+    }
+    const spentAgain = await spentOnChain(confirmRpc, knots.ready);
+    if (spentAgain !== true) {
+      console.error(spentAgain === null ? "Core UTXO check failed. Knots not sent." : "A Knots input is still unspent on Core. Knots not sent.");
       process.exit(1);
     }
     const state = { stop: false };
@@ -833,6 +879,11 @@ async function main() {
     console.error(`Core is confirmed. Knots not sent. ${safeRejectReason(knotsGate.reason)}`);
     process.exit(1);
   }
+  const spentNow = await spentOnChain(coreRpc, knots.ready);
+  if (spentNow !== true) {
+    console.error(spentNow === null ? "Core UTXO check failed. Knots not sent." : "A Knots input is still unspent on Core. Knots not sent.");
+    process.exit(1);
+  }
   state.stop = false;
   const knotsSent: string[] = [];
   const knotsHeld: string[] = [];
@@ -847,7 +898,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  console.error(broadcastAbortFooter(args.includes("--send-knots"), coreAlreadySent));
+  console.error(safeRejectReason(err instanceof Error ? err.message : String(err)));
+  console.error(broadcastAbortFooter(args.includes("--send-knots"), coreAlreadySent, knotsAlreadySent));
   process.exit(1);
 });

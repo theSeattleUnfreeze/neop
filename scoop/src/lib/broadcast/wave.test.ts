@@ -8,8 +8,15 @@ import {
   knotsAfterCoreProblems,
   knotsProblems,
   broadcastAbortFooter,
+  chainTipReady,
+  httpHost,
   mayBroadcast,
+  outputGone,
   readMempoolAccept,
+  readTxOut,
+  sameNetwork,
+  tlsRejectUnauthorized,
+  tlsServerName,
 } from "./wave.ts";
 
 function derSig(sighash: number): Buffer {
@@ -96,5 +103,38 @@ describe("broadcast wave", () => {
     assert.equal(broadcastAbortFooter(false, true), "Knots not sent.");
     assert.equal(broadcastAbortFooter(true, false), "Knots not sent.");
     assert.equal(broadcastAbortFooter(true, true), "Knots not sent.");
+    assert.equal(broadcastAbortFooter(true, false, true), "Knots broadcast already started.");
+    assert.equal(broadcastAbortFooter(false, true, true), "Knots broadcast already started.");
+  });
+
+  it("treats gettxout null as spent only on a finished tip", () => {
+    assert.equal(readTxOut(null), "absent");
+    assert.equal(readTxOut({ bestblock: "aa" }), "present");
+    assert.equal(readTxOut(undefined), "unusable");
+    assert.equal(readTxOut("missing"), "unusable");
+    assert.equal(chainTipReady({ initialblockdownload: false, blocks: 100 }), true);
+    assert.equal(chainTipReady({ initialblockdownload: true, blocks: 100 }), false);
+    assert.equal(chainTipReady({ initialblockdownload: false, blocks: 0 }), false);
+    assert.equal(chainTipReady({ blocks: 100 }), false);
+    assert.equal(outputGone(true, "absent"), true);
+    assert.equal(outputGone(true, "present"), false);
+    assert.equal(outputGone(false, "absent"), null);
+    assert.equal(outputGone(true, "unusable"), null);
+    assert.equal(outputGone(false, "present"), false);
+  });
+
+  it("requires one network and a TLS name only for a hostname", () => {
+    const genesis = "ab".repeat(32);
+    assert.equal(sameNetwork(genesis, genesis.toUpperCase()), true);
+    assert.equal(sameNetwork(genesis, "cd".repeat(32)), false);
+    assert.equal(sameNetwork("zz", "zz"), false);
+    assert.equal(httpHost("::1", "57747", 6), "[::1]:57747");
+    assert.equal(httpHost("10.0.0.2", "8332", 4), "10.0.0.2:8332");
+    assert.equal(tlsServerName("10.0.0.2", 4), undefined);
+    assert.equal(tlsServerName("::1", 6), undefined);
+    assert.equal(tlsServerName("LAN-KNOTS", 0), "LAN-KNOTS");
+    assert.equal(tlsRejectUnauthorized(undefined), true);
+    assert.equal(tlsRejectUnauthorized(true), false);
+    assert.equal(tlsRejectUnauthorized(false), true);
   });
 });

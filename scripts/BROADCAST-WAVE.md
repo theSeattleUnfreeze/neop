@@ -17,7 +17,7 @@ node scripts/broadcast-wave.mjs --send-knots --core-dir PATH --knots-dir PATH
 
 Core RPC goes through the SOCKS proxy in the config. That proxy is not used for Knots. Knots RPC is a direct connection to `https://LAN-KNOTS:57747`, including when `socks` is set at the top of the config for the Core onion.
 
-`--send-knots` sends the Knots folder only when every Knots input is already spent in a Core block. A replacement counts: the original txid does not have to be the transaction that spent it. An input that is still unspent on Core stops the send. Knots is still sent only to the direct Knots RPC.
+`--send-knots` sends the Knots folder only when every Knots input is already spent in a Core block. A replacement counts: the original txid does not have to be the transaction that spent it. An input that is still unspent on Core stops the send. Knots is still sent only to the direct Knots RPC. The script checks that spend again after the last Knots `testmempoolaccept`, and it does not broadcast Core.
 
 ## What is certain
 
@@ -29,7 +29,11 @@ A Core file with no such `OP_RETURN` is accepted only when Knots `gettxout` says
 
 Knots files in this wave are `SIGHASH_ALL`. They can also confirm on Core until the matching Core transaction confirms. The script therefore sends them only after every Core transaction is in a block, and it runs `testmempoolaccept` on Knots a second time just before that send.
 
-`testmempoolaccept` does not put a transaction in the mempool. Its fee ceiling is disabled (`maxfeerate` 0) because these fees were already chosen in the signed files. The node still applies its own relay rules. Electrum broadcast is not a fallback.
+`testmempoolaccept` does not put a transaction in the mempool. Its fee ceiling is disabled (`maxfeerate` 0) because these fees were already chosen in the signed files. `sendrawtransaction` uses that same ceiling. The node still applies its own relay rules. Electrum broadcast is not a fallback.
+
+Core and Knots must report the same genesis block, and both must be finished with initial block download. `gettxout` returning JSON null counts as spent only then. A missing result, or any result that is not an object, fails the check. A node that is still downloading blocks has not proved the spend. Nothing is sent.
+
+Knots TLS checks the certificate unless `tlsInsecure` is true. An IP host does not send a TLS server name. The HTTP Host header brackets an IPv6 address.
 
 The Core node must accept a datacarrier script of at least 120 bytes. Garnish scripts stay within that cap. If the node still has the 83-byte default, `testmempoolaccept` fails and nothing is sent.
 
@@ -37,9 +41,9 @@ The Core node must accept a datacarrier script of at least 120 bytes. Garnish sc
 
 After the first Core `sendrawtransaction` succeeds, that transaction can propagate even if a later Core transaction fails. The script then does not send Knots. It cannot retract a Core transaction that the node already accepted.
 
-A Core transaction can leave the mempool before it confirms. If that happens on two checks in a row, Knots is not sent.
+A Core transaction can leave the mempool before it confirms, including when a replacement spends the same inputs. If that happens on two checks in a row, Knots is not sent. `--send` keeps waiting on the txid in each signed Core file. After the inputs are spent in a Core block, run `--send-knots`. That command does not broadcast Core again.
 
-One confirmation is the gate the script waits for. A reorg can still move that block.
+One confirmation is the gate the script waits for. Just before the Knots send, it checks again that every Knots input is gone from the Core chain. A reorg that puts an input back stops that send. A reorg after the Knots transaction is already accepted can still move a block.
 
 The script prints filenames and accept or reject. It does not print scripts, addresses, raw transactions, txids, or RPC credentials.
 
