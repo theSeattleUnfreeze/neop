@@ -16,6 +16,7 @@ import {
   hasCoreWedge,
   jitterMs,
   knotsAfterCoreProblems,
+  broadcastAbortFooter,
   mayBroadcast,
   readMempoolAccept,
   type MempoolVerdict,
@@ -55,6 +56,8 @@ type Rpc = {
 };
 
 const args = process.argv.slice(2);
+/** Set after the first successful Core sendrawtransaction (partial batch counts). */
+let coreAlreadySent = false;
 
 function flag(name: string): string | undefined {
   const i = args.indexOf(name);
@@ -393,6 +396,7 @@ async function sendChain(
     }
     try {
       await rpc.call("sendrawtransaction", [rows[i].hex]);
+      if (label === "core") coreAlreadySent = true;
       sent.push(`${label} ${rows[i].name}`);
       console.log(`${label} ${rows[i].name} sent`);
     } catch (err) {
@@ -844,6 +848,6 @@ async function main() {
 
 main().catch((err) => {
   console.error(err instanceof Error ? err.message : String(err));
-  console.error(args.includes("--send-knots") ? "Knots not sent." : "Nothing sent.");
+  console.error(broadcastAbortFooter(args.includes("--send-knots"), coreAlreadySent));
   process.exit(1);
 });

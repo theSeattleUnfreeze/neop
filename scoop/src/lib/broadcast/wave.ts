@@ -172,3 +172,10 @@ export function mayBroadcast(localErrors: string[], verdicts: MempoolVerdict[]):
   if (bad) return { ok: false, reason: bad.reason || "testmempoolaccept rejected a transaction" };
   return { ok: true };
 }
+
+/** Footer when the broadcast script aborts from an unexpected error. */
+export function broadcastAbortFooter(sendKnots: boolean, coreAlreadySent: boolean): string {
+  if (sendKnots) return "Knots not sent.";
+  if (coreAlreadySent) return "Knots not sent.";
+  return "Nothing sent.";
+}

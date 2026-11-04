@@ -7,6 +7,7 @@ import {
   jitterMs,
   knotsAfterCoreProblems,
   knotsProblems,
+  broadcastAbortFooter,
   mayBroadcast,
   readMempoolAccept,
 } from "./wave.ts";
@@ -88,5 +89,12 @@ describe("broadcast wave", () => {
     assert.equal(policy.ok, false);
     if (!policy.ok) assert.equal(policy.reason, "datacarrier");
     assert.equal(mayBroadcast([], []).ok, false);
+  });
+
+  it("names the abort footer after Core send or --send-knots", () => {
+    assert.equal(broadcastAbortFooter(false, false), "Nothing sent.");
+    assert.equal(broadcastAbortFooter(false, true), "Knots not sent.");
+    assert.equal(broadcastAbortFooter(true, false), "Knots not sent.");
+    assert.equal(broadcastAbortFooter(true, true), "Knots not sent.");
   });
 });
