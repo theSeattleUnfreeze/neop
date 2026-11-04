@@ -11,9 +11,11 @@ import { Buffer } from "buffer";
 import { Psbt, Transaction } from "bitcoinjs-lib";
 
 export const MIN_WEDGE_SCRIPT_LEN = 84;
-/** A few bytes above an 82-byte payload, through 200. Knots still rejects the script. */
+/** ScriptPubKey cap. Longer than Knots' 83-byte reduced-data limit, short enough for typical Core relay. */
+export const MAX_WEDGE_SCRIPT_LEN = 120;
 export const MIN_PAYLOAD_LEN = 85;
-export const MAX_PAYLOAD_LEN = 200;
+/** One OP_RETURN byte plus a two-byte push leaves this much data inside the script cap. */
+export const MAX_PAYLOAD_LEN = MAX_WEDGE_SCRIPT_LEN - 3;
 const DUST_SATS = 546;
 const TEXT = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,;:-";
 
@@ -87,7 +89,8 @@ export function opReturnScript(data: Buffer | Buffer[]): Buffer {
 }
 
 function hexPayload(n: number): Buffer {
-  const even = n % 2 === 0 ? n : Math.min(MAX_PAYLOAD_LEN, n + 1);
+  let even = n % 2 === 0 ? n : n + 1;
+  if (even > MAX_PAYLOAD_LEN) even -= 2;
   return Buffer.from(randomBytes(even / 2).toString("hex"), "ascii");
 }
 
@@ -106,28 +109,27 @@ function pushPayload(n: number): Buffer[] {
   return sizes.map((size, i) => (i === 0 ? randomText(size) : randomBytes(size)));
 }
 
-/** Kind rotates with index. Length is chosen independently, from 85 through 200. */
+function payloadFor(kind: PayloadKind, n: number): Buffer | Buffer[] {
+  if (kind === "bytes") return randomBytes(n);
+  if (kind === "text") return randomText(n);
+  if (kind === "hex") return hexPayload(n);
+  return pushPayload(n);
+}
+
+/** Kind rotates with index. The scriptPubKey stays within 84 through 120 bytes. */
 export function nextWedge(index: number): Wedge {
   const kind = PAYLOAD_KINDS[Math.abs(index) % PAYLOAD_KINDS.length];
-  const n = randomInt(MIN_PAYLOAD_LEN, MAX_PAYLOAD_LEN);
-  if (kind === "bytes") {
-    const data = randomBytes(n);
-    return { script: opReturnScript(data), kind, dataBytes: data.length };
+  let n = randomInt(MIN_PAYLOAD_LEN, MAX_PAYLOAD_LEN);
+  while (n >= MIN_PAYLOAD_LEN) {
+    const data = payloadFor(kind, n);
+    const script = opReturnScript(data);
+    const dataBytes = Array.isArray(data) ? data.reduce((sum, part) => sum + part.length, 0) : data.length;
+    if (script.length >= MIN_WEDGE_SCRIPT_LEN && script.length <= MAX_WEDGE_SCRIPT_LEN) {
+      return { script, kind, dataBytes };
+    }
+    n -= 1;
   }
-  if (kind === "text") {
-    const data = randomText(n);
-    return { script: opReturnScript(data), kind, dataBytes: data.length };
-  }
-  if (kind === "hex") {
-    const data = hexPayload(n);
-    return { script: opReturnScript(data), kind, dataBytes: data.length };
-  }
-  const parts = pushPayload(n);
-  return {
-    script: opReturnScript(parts),
-    kind,
-    dataBytes: parts.reduce((sum, part) => sum + part.length, 0),
-  };
+  throw new Error("OP_RETURN script could not be kept within 120 bytes.");
 }
 
 export function wedgeCycleStart(): number {
@@ -197,6 +199,9 @@ export function garnishUnsignedPsbt(bytes: Uint8Array, wedge: Wedge = nextWedge(
   const script = wedge.script;
   if (script.length < MIN_WEDGE_SCRIPT_LEN || script[0] !== 0x6a) {
     throw new Error("OP_RETURN script is shorter than 84 bytes.");
+  }
+  if (script.length > MAX_WEDGE_SCRIPT_LEN) {
+    throw new Error("OP_RETURN script is longer than 120 bytes.");
   }
   if (psbt.txOutputs.some((out) => out.script.length > 0 && out.script[0] === 0x6a)) {
     throw new Error("This PSBT already has an OP_RETURN output.");

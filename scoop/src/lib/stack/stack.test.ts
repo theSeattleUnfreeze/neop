@@ -24,19 +24,26 @@ function row(partial: Partial<StackStatusRow> & Pick<StackStatusRow, "id" | "sta
 }
 
 describe("stack summary", () => {
-  it("is ready only when both indexers agree", () => {
-    const ready = summarizeStack([
+  it("does not treat Core vs Knots tip gap as a problem", () => {
+    const forked = summarizeStack([
+      row({ id: "core-node", state: "up", height: 100, label: "Core node" }),
       row({ id: "core-fulcrum", state: "up", height: 100, label: "Core Fulcrum" }),
-      row({ id: "knots-fulcrum", state: "up", height: 102, label: "Knots Fulcrum" }),
+      row({ id: "knots-node", state: "up", height: 900, label: "Knots node" }),
+      row({ id: "knots-fulcrum", state: "up", height: 900, label: "Knots Fulcrum" }),
     ]);
-    assert.equal(ready.catalogReady, true);
+    assert.equal(forked.catalogReady, true);
+    assert.match(forked.summary, /own chains/i);
+  });
 
-    const skewed = summarizeStack([
+  it("warns when an indexer lags its own node", () => {
+    const lagged = summarizeStack([
+      row({ id: "core-node", state: "up", height: 200, label: "Core node" }),
       row({ id: "core-fulcrum", state: "up", height: 100, label: "Core Fulcrum" }),
       row({ id: "knots-fulcrum", state: "up", height: 900, label: "Knots Fulcrum" }),
     ]);
-    assert.equal(skewed.catalogReady, false);
-    assert.match(skewed.summary, /800/);
+    assert.equal(lagged.catalogReady, false);
+    assert.match(lagged.summary, /Core Fulcrum/);
+    assert.match(lagged.summary, /100/);
   });
 
   it("names the indexer that is down", () => {

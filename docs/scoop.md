@@ -88,7 +88,7 @@ SCOOP_ELECTRUM_TLS_INSECURE=1
 
 ## Stack status
 
-The dashboard probes Core RPC, Core Fulcrum, Knots Fulcrum, and the Knots RPC tunnel. A catalog is ready when both Electrum servers answer and their tips are within a few blocks. Paths and start/stop live on **Stack** (`/stack`), which reads `SCOOP_STACK_CONFIG`.
+The dashboard probes Core RPC, Core Fulcrum, Knots Fulcrum, and the Knots RPC tunnel. A catalog is ready when both Electrum servers answer and each Fulcrum is within a few blocks of its own node. Core tip vs Knots tip is not compared — the hard fork makes that gap expected. Paths and start/stop live on **Stack** (`/stack`), which reads `SCOOP_STACK_CONFIG`.
 
 Knots on StartOS is observed from here. Scoop does not stop that host.
 

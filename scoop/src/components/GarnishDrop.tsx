@@ -53,7 +53,7 @@ export function GarnishDrop() {
         <p>
           Drop unsigned Core PSBTs from Sparrow, one coin in each. Scoop adds an OP_RETURN whose
           script is longer than 83 bytes, so Knots will not accept the transaction while the
-          reduced-data rule holds (through 2027-09-01). Data length varies from 85 to 200 bytes, and
+          reduced-data rule holds (through 2027-09-01). The script stays within 84 to 120 bytes, and
           the files in one drop rotate through raw bytes, text, hex, and several pushes. Nothing is
           shared between them. Scoop does not join the files, does not sign, and does not broadcast.
         </p>
@@ -66,7 +66,7 @@ export function GarnishDrop() {
         <p className="banner warn">
           This machine’s Core node has no datacarrier override. Bitcoin Core 28 keeps the default
           83-byte limit, so it will refuse to relay the garnish until <span className="mono">datacarriersize</span> is
-          set to at least 220 and the node is restarted. A script here can be a little over 200
+          set to at least 120 and the node is restarted. A script here is at most 120
           bytes. Do that before broadcast, not by stopping Core while Fulcrum is still downloading
           blocks.
         </p>

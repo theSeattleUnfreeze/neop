@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import { Psbt } from "bitcoinjs-lib";
 import {
   MAX_PAYLOAD_LEN,
+  MAX_WEDGE_SCRIPT_LEN,
   MIN_PAYLOAD_LEN,
+  MIN_WEDGE_SCRIPT_LEN,
   garnishUnsignedPsbt,
   nextWedge,
   opReturnScript,
@@ -58,7 +60,8 @@ describe("garnish", () => {
     const raw = oneCoinPsbt().toBuffer();
     const first = garnishUnsignedPsbt(raw, nextWedge(0));
     const second = garnishUnsignedPsbt(raw, nextWedge(1));
-    assert.ok(first.scriptPubKeyLength > 83);
+    assert.ok(first.scriptPubKeyLength >= MIN_WEDGE_SCRIPT_LEN);
+    assert.ok(first.scriptPubKeyLength <= MAX_WEDGE_SCRIPT_LEN);
     assert.ok(first.feeSatsAfter > first.feeSatsBefore);
     assert.equal(first.inputCount, 1);
     assert.notEqual(first.psbtBase64, second.psbtBase64);
@@ -68,7 +71,7 @@ describe("garnish", () => {
     assert.equal(again.txOutputs.length, 2);
     const wedge = again.txOutputs.find((out) => out.script[0] === 0x6a);
     assert.ok(wedge);
-    assert.ok(wedge!.script.length > 83);
+    assert.ok(wedge!.script.length >= MIN_WEDGE_SCRIPT_LEN && wedge!.script.length <= MAX_WEDGE_SCRIPT_LEN);
     assert.equal(wedge!.value, 0);
     assert.equal(again.txOutputs[0].value, 90_000 - (first.feeSatsAfter - first.feeSatsBefore));
   });
@@ -95,14 +98,14 @@ describe("garnish", () => {
     assert.throws(() => garnishUnsignedPsbt(psbt.toBuffer(), stub()), /one coin at a time/);
   });
 
-  it("cycles payload shape and varies length from 85 through 200", () => {
+  it("cycles payload shape and keeps the script within 84 through 120 bytes", () => {
     const kinds = ["bytes", "text", "hex", "pushes"] as const;
     const lengths = new Set<number>();
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 40; i++) {
       const wedge = nextWedge(i);
       assert.equal(wedge.kind, kinds[i % 4]);
-      assert.ok(wedge.script.length > 83);
-      assert.ok(wedge.dataBytes >= MIN_PAYLOAD_LEN && wedge.dataBytes <= MAX_PAYLOAD_LEN);
+      assert.ok(wedge.script.length >= MIN_WEDGE_SCRIPT_LEN && wedge.script.length <= MAX_WEDGE_SCRIPT_LEN);
+      assert.ok(wedge.dataBytes >= MIN_PAYLOAD_LEN - 1 && wedge.dataBytes <= MAX_PAYLOAD_LEN);
       lengths.add(wedge.dataBytes);
       const parts = pushes(wedge.script);
       const data = Buffer.concat(parts);
