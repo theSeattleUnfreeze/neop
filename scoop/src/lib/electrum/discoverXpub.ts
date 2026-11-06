@@ -55,6 +55,20 @@ export async function discoverXpubScriptKind(opts: {
   }
 
   const urls = [opts.fulcrumUrl, opts.shulcrumUrl].filter(Boolean) as string[];
+  if (!opts.probeUsed && urls.length && !(await anyElectrumReachable(urls))) {
+    const fallbackKind: ScriptKind = prefixIsHint ? parsed.kind : "p2wpkh";
+    const fallback = expandAccountXpub({
+      extendedKey: opts.extendedKey,
+      scriptKind: fallbackKind,
+      gapLimit: 1,
+    });
+    return {
+      scriptKind: fallbackKind,
+      accountPath: fallback.accountPath,
+      discovered: false,
+      hits: [],
+    };
+  }
   const hits: DiscoverHit[] = [];
 
   for (const kind of DISCOVER_KINDS) {
@@ -137,6 +151,27 @@ async function scripthashLooksUsed(
  * Scan receive (and optional change) addresses until one has history/balance.
  * Reuses one Electrum connection per tip so a 50-address gap check stays cheap.
  */
+function electrumDown(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /timeout|closed|ECONN|socket|ENOTFOUND|EHOSTUNREACH/i.test(message);
+}
+
+export async function anyElectrumReachable(electrumUrls: string[]): Promise<boolean> {
+  for (const url of electrumUrls) {
+    const client = ElectrumClient.fromUrl(url);
+    try {
+      await client.connect(4_000);
+      await client.serverVersion();
+      return true;
+    } catch {
+      // this tip is down
+    } finally {
+      client.close();
+    }
+  }
+  return false;
+}
+
 export async function probeWatchUsage(
   scripts: DerivedWatchScript[],
   electrumUrls: string[]
@@ -149,7 +184,7 @@ export async function probeWatchUsage(
     for (const url of electrumUrls) {
       const client = ElectrumClient.fromUrl(url);
       try {
-        await client.connect(5_000);
+        await client.connect(4_000);
         await client.serverVersion();
         clients.push(client);
       } catch {
@@ -158,8 +193,11 @@ export async function probeWatchUsage(
     }
     if (!clients.length) return { used: false, reachable: false };
 
+    const alive = [...clients];
     for (const script of scripts) {
-      for (const client of clients) {
+      if (!alive.length) return { used: false, reachable: false };
+      for (let i = alive.length - 1; i >= 0; i -= 1) {
+        const client = alive[i];
         try {
           const bal = (await client.getBalance(script.scripthash)) as {
             confirmed?: number;
@@ -172,12 +210,15 @@ export async function probeWatchUsage(
           if (Array.isArray(hist) && hist.length > 0) {
             return { used: true, reachable: true };
           }
-        } catch {
-          // this tip failed this address; try the other tip
+        } catch (err) {
+          if (electrumDown(err)) {
+            client.close();
+            alive.splice(i, 1);
+          }
         }
       }
     }
-    return { used: false, reachable: true };
+    return { used: false, reachable: alive.length > 0 };
   } finally {
     for (const c of clients) c.close();
   }

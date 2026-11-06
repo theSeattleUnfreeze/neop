@@ -16,6 +16,28 @@ export function defaultStackConfigPath(env: NodeJS.ProcessEnv = process.env): st
   return path.join(os.homedir(), ".neop", "stack.json");
 }
 
+/** True when Scoop itself is the container that should keep host.docker.internal. */
+export function scoopRunsInDocker(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.SCOOP_IN_DOCKER === "1" || env.SCOOP_IN_DOCKER === "true") return true;
+  try {
+    return fs.existsSync("/.dockerenv");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * On the Windows/macOS host, host.docker.internal is for containers talking out.
+ * Scoop on the host must use loopback or Core looks "connection refused".
+ */
+export function localizeStackEndpoint(
+  endpoint: string,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  if (!endpoint || scoopRunsInDocker(env)) return endpoint;
+  return endpoint.replace(/host\.docker\.internal/gi, "127.0.0.1");
+}
+
 export function defaultStackConfig(env: NodeJS.ProcessEnv = process.env): StackConfig {
   const core = emptyService("core-node", "Core node", "local");
   core.endpoint = env.CORE_RPC_URL?.trim() || "http://127.0.0.1:8332";
@@ -67,7 +89,11 @@ function asFiles(value: unknown): StackFileLink[] {
   return out;
 }
 
-function mergeService(base: StackService, raw: unknown): StackService {
+function mergeService(
+  base: StackService,
+  raw: unknown,
+  env: NodeJS.ProcessEnv = process.env
+): StackService {
   if (!raw || typeof raw !== "object") return base;
   const rec = raw as Record<string, unknown>;
   const control = rec.control === "remote" || rec.control === "local" ? rec.control : base.control;
@@ -75,7 +101,7 @@ function mergeService(base: StackService, raw: unknown): StackService {
     ...base,
     label: asString(rec.label) || base.label,
     control,
-    endpoint: asString(rec.endpoint) || base.endpoint,
+    endpoint: localizeStackEndpoint(asString(rec.endpoint) || base.endpoint, env),
     binary: asString(rec.binary),
     datadir: asString(rec.datadir),
     configFile: asString(rec.configFile),
@@ -104,7 +130,16 @@ export function normalizeStackConfig(raw: unknown, env: NodeJS.ProcessEnv = proc
     }
   }
   return {
-    services: defaults.services.map((svc) => mergeService(svc, byId.get(svc.id))),
+    services: defaults.services.map((svc) => mergeService(svc, byId.get(svc.id), env)),
+  };
+}
+
+function localizeConfig(config: StackConfig, env: NodeJS.ProcessEnv): StackConfig {
+  return {
+    services: config.services.map((svc) => ({
+      ...svc,
+      endpoint: localizeStackEndpoint(svc.endpoint, env),
+    })),
   };
 }
 
@@ -113,9 +148,12 @@ export function loadStackConfig(
   env: NodeJS.ProcessEnv = process.env
 ): StackConfig {
   const resolved = filePath ?? defaultStackConfigPath(env);
-  if (!resolved || !fs.existsSync(resolved)) return defaultStackConfig(env);
-  const parsed = JSON.parse(fs.readFileSync(resolved, "utf8")) as unknown;
-  return normalizeStackConfig(parsed, env);
+  if (!resolved || !fs.existsSync(resolved)) {
+    return localizeConfig(defaultStackConfig(env), env);
+  }
+  const raw = fs.readFileSync(resolved, "utf8").replace(/^\uFEFF/, "");
+  const parsed = JSON.parse(raw) as unknown;
+  return localizeConfig(normalizeStackConfig(parsed, env), env);
 }
 
 export function saveStackConfig(config: StackConfig, filePath: string = defaultStackConfigPath()): void {

@@ -1,12 +1,14 @@
 import { eq } from "drizzle-orm";
 import { aggregateAccountBalances } from "@/lib/catalog/balances";
 import { outpointRowsFromTips, witnessFromTips } from "@/lib/catalog/outpoints";
+import { anyElectrumReachable } from "@/lib/electrum/discoverXpub";
 import { envElectrumUrls, fetchScriptTip } from "@/lib/sync/fetchTip";
 import {
   applyReplayReceiveSync,
   replaceTipUnspent,
 } from "@/lib/organizer/replayNotifications";
 import { suggestTasksFromRows } from "@/lib/organizer/suggestTasks";
+import { recordTipSync } from "@/lib/organizer/tipHealth";
 import type { ScoopDb } from "@/lib/db/client";
 import {
   organizerAccounts,
@@ -42,9 +44,20 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
     fulcrumError: urls.fulcrum ? null : ("FULCRUM_URL unset" as string | null),
     shulcrumError: urls.shulcrum ? null : ("SHULCRUM_URL unset" as string | null),
   };
+  const configured = [urls.fulcrum, urls.shulcrum].filter(Boolean) as string[];
+  if (configured.length && !(await anyElectrumReachable(configured))) {
+    if (urls.fulcrum) await recordTipSync(db, "core", false, "Electrum unreachable");
+    if (urls.shulcrum) await recordTipSync(db, "knots", false, "Electrum unreachable");
+    return { pending: true as const, health, rows: [], newNotifications: [], suggestedTasks: 0 };
+  }
 
   const rows = [];
   const newNotifications = [];
+  let tipAnswered = false;
+  let coreOk: boolean | null = null;
+  let knotsOk: boolean | null = null;
+  let coreError: string | null = null;
+  let knotsError: string | null = null;
   for (const s of scripts) {
     const core = urls.fulcrum
       ? await fetchScriptTip("core", urls.fulcrum, s.electrumScripthash)
@@ -52,6 +65,27 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
     const knots = urls.shulcrum
       ? await fetchScriptTip("knots", urls.shulcrum, s.electrumScripthash)
       : undefined;
+    if (core) {
+      coreOk = core.ok;
+      if (!core.ok) coreError = core.error ?? "fulcrum error";
+    }
+    if (knots) {
+      knotsOk = knots.ok;
+      if (!knots.ok) knotsError = knots.error ?? "shulcrum error";
+    }
+    if (core?.ok || knots?.ok) tipAnswered = true;
+    else if (!tipAnswered) {
+      // First watched script failed on every configured tip — stop before the gap.
+      if (urls.fulcrum) await recordTipSync(db, "core", false, coreError ?? "unreachable");
+      if (urls.shulcrum) await recordTipSync(db, "knots", false, knotsError ?? "unreachable");
+      return {
+        pending: true as const,
+        health,
+        rows: [],
+        newNotifications: [],
+        suggestedTasks: 0,
+      };
+    }
     const live = outpointRowsFromTips(s.id, s.address, core, knots, {
       accountId: s.accountId,
       watchAccountId: s.accountId,
@@ -111,6 +145,13 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
     .set({ lastSyncedAt: new Date(), updatedAt: new Date() })
     .where(eq(organizerAccounts.id, id));
 
+  if (urls.fulcrum) {
+    await recordTipSync(db, "core", coreOk === true, coreError);
+  }
+  if (urls.shulcrum) {
+    await recordTipSync(db, "knots", knotsOk === true, knotsError);
+  }
+
   const balances = aggregateAccountBalances(
     [
       {
@@ -121,7 +162,13 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
         manualKnotsSats: account.manualKnotsSats,
       },
     ],
-    rows
+    rows,
+    {
+      core: coreOk === true,
+      knots: knotsOk === true,
+      coreError,
+      knotsError,
+    }
   );
 
   return {

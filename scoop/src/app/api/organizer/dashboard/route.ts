@@ -21,7 +21,6 @@ export async function GET() {
     organizerAccounts,
     organizerTasks,
     organizerNotifications,
-    syncState,
   } = await import("@/lib/db/schema");
   const db = createDb();
 
@@ -31,10 +30,12 @@ export async function GET() {
     .orderBy(organizerAccounts.sortOrder);
 
   const { loadOrganizerRowsFromTipState } = await import("@/lib/organizer/tipStateRows");
+  const { loadTipKnowledge } = await import("@/lib/organizer/tipHealth");
   const watchAccountIds = accounts
     .map((a) => a.watchAccountId)
     .filter((id): id is number => id != null);
   const rows = await loadOrganizerRowsFromTipState(db, watchAccountIds);
+  const tips = await loadTipKnowledge(db);
 
   const balances = aggregateAccountBalances(
     accounts.map((a) => ({
@@ -44,7 +45,8 @@ export async function GET() {
       manualCoreSats: a.manualCoreSats,
       manualKnotsSats: a.manualKnotsSats,
     })),
-    rows
+    rows,
+    tips
   );
 
   const openTasks = await db
@@ -87,15 +89,13 @@ export async function GET() {
   const unreadTotal = [...notifCountByAccount.values()].reduce((a, b) => a + b, 0);
   const openTaskTotal = [...taskCountByAccount.values()].reduce((a, b) => a + b, 0);
 
-  const tipHealth = await db.select().from(syncState);
-
   return NextResponse.json(
     serializeBigints({
-      portfolio: portfolioTotals(balances),
+      portfolio: portfolioTotals(balances, tips),
       cards,
       unreadNotificationCount: unreadTotal,
       openTaskCount: openTaskTotal,
-      tipHealth,
+      tipHealth: tips,
     })
   );
 }

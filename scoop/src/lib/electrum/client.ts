@@ -100,14 +100,30 @@ export class ElectrumClient {
     this.pending.clear();
   }
 
-  async call(method: string, params: unknown[] = []): Promise<unknown> {
+  async call(method: string, params: unknown[] = [], timeoutMs = 8_000): Promise<unknown> {
     if (!this.socket) await this.connect();
     const id = this.nextId++;
     const payload = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        if (!this.pending.has(id)) return;
+        this.pending.delete(id);
+        this.close();
+        reject(new Error("electrum call timeout"));
+      }, timeoutMs);
+      this.pending.set(id, {
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
       this.socket!.write(payload, (err) => {
         if (err) {
+          clearTimeout(timer);
           this.pending.delete(id);
           reject(err);
         }

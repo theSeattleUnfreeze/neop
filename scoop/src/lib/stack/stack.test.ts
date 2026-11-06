@@ -3,7 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { loadStackConfig, normalizeStackConfig, revealablePaths, saveStackConfig } from "./config.ts";
+import {
+  loadStackConfig,
+  localizeStackEndpoint,
+  normalizeStackConfig,
+  revealablePaths,
+  saveStackConfig,
+} from "./config.ts";
 import { rpcProbeFromHttp, selectRpcAttempt } from "./probe.ts";
 import { summarizeStack } from "./summarize.ts";
 import type { StackStatusRow } from "./types.ts";
@@ -79,6 +85,34 @@ describe("rpc probe", () => {
 });
 
 describe("stack config", () => {
+  it("rewrites host.docker.internal to loopback outside Docker", () => {
+    assert.equal(
+      localizeStackEndpoint("http://host.docker.internal:8332", {}),
+      "http://127.0.0.1:8332"
+    );
+    assert.equal(
+      localizeStackEndpoint("tcp://host.docker.internal:50111", { SCOOP_IN_DOCKER: "1" }),
+      "tcp://host.docker.internal:50111"
+    );
+    const loaded = normalizeStackConfig(
+      {
+        services: [
+          { id: "core-node", endpoint: "http://host.docker.internal:8332" },
+          { id: "core-fulcrum", endpoint: "tcp://host.docker.internal:50111" },
+        ],
+      },
+      {}
+    );
+    assert.equal(
+      loaded.services.find((svc) => svc.id === "core-node")?.endpoint,
+      "http://127.0.0.1:8332"
+    );
+    assert.equal(
+      loaded.services.find((svc) => svc.id === "core-fulcrum")?.endpoint,
+      "tcp://127.0.0.1:50111"
+    );
+  });
+
   it("round-trips operator paths and lists them for Explorer", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "scoop-stack-"));
     const file = path.join(dir, "stack.json");

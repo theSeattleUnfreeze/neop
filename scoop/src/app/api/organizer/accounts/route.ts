@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { eq, inArray } from "drizzle-orm";
 import { serializeBigints, parseSatsInput } from "@/lib/catalog/balances";
+import type { ScoopDb } from "@/lib/db/client";
 
 export const runtime = "nodejs";
 
@@ -11,6 +13,68 @@ function requireDb() {
     );
   }
   return null;
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { code?: string }).code;
+  return code === "23505";
+}
+
+async function labelForScripthashes(db: ScoopDb, scripthashes: string[]): Promise<string | null> {
+  if (!scripthashes.length) return null;
+  const { watchedScripts, organizerAccounts } = await import("@/lib/db/schema");
+  const rows = await db
+    .select({ label: organizerAccounts.label })
+    .from(watchedScripts)
+    .innerJoin(
+      organizerAccounts,
+      eq(organizerAccounts.watchAccountId, watchedScripts.accountId)
+    )
+    .where(inArray(watchedScripts.electrumScripthash, scripthashes))
+    .limit(1);
+  return rows[0]?.label ?? null;
+}
+
+async function existingWatchConflict(db: ScoopDb, scripthashes: string[]) {
+  const label = await labelForScripthashes(db, scripthashes);
+  if (!label) {
+    const { watchedScripts } = await import("@/lib/db/schema");
+    const orphan = await db
+      .select({ id: watchedScripts.id })
+      .from(watchedScripts)
+      .where(inArray(watchedScripts.electrumScripthash, scripthashes))
+      .limit(1);
+    if (!orphan.length) return null;
+    return NextResponse.json(
+      {
+        error:
+          "Those receive addresses are already watched. Open the existing wallet or remove it first.",
+      },
+      { status: 409 }
+    );
+  }
+  return NextResponse.json(
+    {
+      error: `Those receive addresses are already watched by “${label}”. Open that wallet or remove it first.`,
+      existingLabel: label,
+    },
+    { status: 409 }
+  );
+}
+
+async function conflictFromUnique(err: unknown, db: ScoopDb, scripthashes: string[]) {
+  if (!isUniqueViolation(err)) return null;
+  return (
+    (await existingWatchConflict(db, scripthashes)) ??
+    NextResponse.json(
+      {
+        error:
+          "Those receive addresses are already watched. Open the existing wallet or remove it first.",
+      },
+      { status: 409 }
+    )
+  );
 }
 
 export async function GET() {
@@ -137,26 +201,38 @@ export async function POST(req: Request) {
       });
     }
 
-    const [watch] = await db
-      .insert(watchedAccounts)
-      .values({
-        label,
-        watchKey: expanded.watchKey,
-        kind: "xpub",
-        derivationHint: expanded.accountPath,
-        gapLimit,
-      })
-      .returning();
-    await db.insert(watchedScripts).values(
-      expanded.scripts.map((s) => ({
-        accountId: watch.id,
-        address: s.address,
-        electrumScripthash: s.scripthash,
-        scriptPubKeyHex: s.scriptPubKeyHex,
-        path: s.path,
-      }))
+    const conflict = await existingWatchConflict(
+      db,
+      expanded.scripts.map((s) => s.scripthash)
     );
-    watchAccountId = watch.id;
+    if (conflict) return conflict;
+
+    try {
+      const [watch] = await db
+        .insert(watchedAccounts)
+        .values({
+          label,
+          watchKey: expanded.watchKey,
+          kind: "xpub",
+          derivationHint: expanded.accountPath,
+          gapLimit,
+        })
+        .returning();
+      await db.insert(watchedScripts).values(
+        expanded.scripts.map((s) => ({
+          accountId: watch.id,
+          address: s.address,
+          electrumScripthash: s.scripthash,
+          scriptPubKeyHex: s.scriptPubKeyHex,
+          path: s.path,
+        }))
+      );
+      watchAccountId = watch.id;
+    } catch (e) {
+      const conflicted = await conflictFromUnique(e, db, expanded.scripts.map((s) => s.scripthash));
+      if (conflicted) return conflicted;
+      throw e;
+    }
   } else if (source === "electrum" && !watchAccountId && !body.scripts?.length) {
     return NextResponse.json(
       { error: "electrum wallet requires an xpub or at least one address" },
@@ -185,24 +261,39 @@ export async function POST(req: Request) {
         address: scripts[0]?.address ?? null,
       });
     }
-    const [watch] = await db
-      .insert(watchedAccounts)
-      .values({
-        label,
-        watchKey: body.watchKey ?? scripts.map((s) => s.scripthash).join(","),
-        kind: "address_list",
-      })
-      .returning();
-    await db.insert(watchedScripts).values(
-      scripts.map((s) => ({
-        accountId: watch.id,
-        address: s.address,
-        electrumScripthash: s.scripthash,
-        scriptPubKeyHex: s.scriptPubKeyHex,
-        path: s.path,
-      }))
+    const conflict = await existingWatchConflict(
+      db,
+      scripts.map((s) => s.scripthash)
     );
-    watchAccountId = watch.id;
+    if (conflict) return conflict;
+    try {
+      const [watch] = await db
+        .insert(watchedAccounts)
+        .values({
+          label,
+          watchKey: body.watchKey ?? scripts.map((s) => s.scripthash).join(","),
+          kind: "address_list",
+        })
+        .returning();
+      await db.insert(watchedScripts).values(
+        scripts.map((s) => ({
+          accountId: watch.id,
+          address: s.address,
+          electrumScripthash: s.scripthash,
+          scriptPubKeyHex: s.scriptPubKeyHex,
+          path: s.path,
+        }))
+      );
+      watchAccountId = watch.id;
+    } catch (e) {
+      const conflicted = await conflictFromUnique(
+        e,
+        db,
+        scripts.map((s) => s.scripthash)
+      );
+      if (conflicted) return conflicted;
+      throw e;
+    }
   }
 
   let manualCoreSats: bigint | null = null;
@@ -214,30 +305,45 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid manual sats value" }, { status: 400 });
   }
 
-  const [account] = await db
-    .insert(organizerAccounts)
-    .values({
-      label,
-      notes: body.notes ?? "",
-      reminder: body.reminder ?? "",
-      source,
-      watchAccountId,
-      manualCoreSats,
-      manualKnotsSats,
-      sortOrder: body.sortOrder ?? 0,
-      updatedAt: new Date(),
-    })
-    .returning();
+  let account;
+  try {
+    [account] = await db
+      .insert(organizerAccounts)
+      .values({
+        label,
+        notes: body.notes ?? "",
+        reminder: body.reminder ?? "",
+        source,
+        watchAccountId,
+        manualCoreSats,
+        manualKnotsSats,
+        sortOrder: body.sortOrder ?? 0,
+        updatedAt: new Date(),
+      })
+      .returning();
+  } catch (e) {
+    console.error("organizer account create failed", e instanceof Error ? e.message : e);
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "could not save that wallet" },
+      { status: 500 }
+    );
+  }
 
+  // Save first. A full Electrum walk can take minutes when an indexer accepts
+  // TCP but never answers; the UI must not wait on that.
   let sync: unknown = null;
   if (source === "electrum" && account.watchAccountId) {
-    try {
-      const { syncOrganizerWallet } = await import("@/lib/organizer/syncWallet");
-      const result = await syncOrganizerWallet(db, account.id);
-      if (!("error" in result)) sync = serializeBigints(result);
-    } catch (e) {
-      sync = { error: e instanceof Error ? e.message : String(e) };
-    }
+    const walletId = account.id;
+    sync = { pending: true as const };
+    after(async () => {
+      try {
+        const { createDb: openDb } = await import("@/lib/db/client");
+        const { syncOrganizerWallet } = await import("@/lib/organizer/syncWallet");
+        await syncOrganizerWallet(openDb(), walletId);
+      } catch {
+        // Operator can sync from the wallet page when the stack is up.
+      }
+    });
   }
 
   return NextResponse.json(
