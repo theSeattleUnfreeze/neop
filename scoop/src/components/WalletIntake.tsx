@@ -74,6 +74,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [savedPending, setSavedPending] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [sparrowPassword, setSparrowPassword] = useState("");
   const [sparrowNote, setSparrowNote] = useState("");
@@ -113,6 +114,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     setError(null);
     setPreview(null);
     setPreviewing(false);
+    setSavedPending(false);
     setTouched({});
     setSparrowPassword("");
     setSparrowNote("");
@@ -151,7 +153,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     if (step === "xpub") return !xpubErr && !pathErr && !gapErr;
     if (step === "address") return !addrErr && !shErr;
     if (step === "manual") return !labelErr && !coreErr && !knotsErr;
-    if (step === "review") return !previewing && !busy;
+    if (step === "review") return !busy;
     return false;
   })();
 
@@ -199,6 +201,16 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     return body;
   };
 
+  const readJson = async (res: Response): Promise<Record<string, unknown>> => {
+    const text = await res.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      return { error: `HTTP ${res.status}` };
+    }
+  };
+
   const runPreview = useCallback(async () => {
     if (kind !== "wallet") return;
     setPreviewing(true);
@@ -209,8 +221,10 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...buildBody(), preview: true }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Could not check this wallet");
+      const json = await readJson(res);
+      if (!res.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "Could not check this wallet");
+      }
       const emptyWatch = Boolean(json.emptyWatch);
       setPreview({
         emptyWatch,
@@ -218,9 +232,9 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
         used: Boolean(json.used),
         gapLimit: Number(json.gapLimit ?? parseGapLimit(gapLimit)),
         addressCount: Number(json.addressCount ?? 0),
-        sampleAddress: json.sampleAddress,
-        accountPath: json.accountPath,
-        scriptKind: json.scriptKind,
+        sampleAddress: typeof json.sampleAddress === "string" ? json.sampleAddress : null,
+        accountPath: typeof json.accountPath === "string" ? json.accountPath : null,
+        scriptKind: typeof json.scriptKind === "string" ? json.scriptKind : null,
       });
       if (emptyWatch) setShowAdvanced(true);
     } catch (e) {
@@ -250,8 +264,8 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
         headers: { "content-type": "application/json", "x-scoop-local": "1" },
         body: JSON.stringify({ fileBase64, password: password || undefined }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "could not read that wallet file");
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "could not read that wallet file");
       const accounts = (json.accounts ?? []) as {
         label: string;
         xpub: string;
@@ -263,7 +277,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
       if (first) {
         setXpub(first.xpub);
         if (first.derivationPath) setDerivationPath(first.derivationPath);
-        setLabel((current) => current.trim() || json.name || current);
+        setLabel((current) => current.trim() || (typeof json.name === "string" ? json.name : "") || current);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -290,9 +304,16 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
         headers: { "content-type": "application/json" },
         body: JSON.stringify(buildBody()),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "create failed");
+      const json = await readJson(res);
+      if (!res.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "create failed");
+      }
       await onCreated();
+      const sync = json.sync as { pending?: boolean } | undefined;
+      if (sync?.pending) {
+        setSavedPending(true);
+        return;
+      }
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -339,7 +360,10 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
               <button
                 type="button"
                 className={`choice-card${kind === "wallet" ? " is-selected" : ""}`}
-                onClick={() => setKind("wallet")}
+                onClick={() => {
+                  setKind("wallet");
+                  go("label", "fwd");
+                }}
               >
                 <strong>Entire wallet</strong>
                 <span>xpub from Sparrow or Shrike — a set of addresses</span>
@@ -347,7 +371,10 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
               <button
                 type="button"
                 className={`choice-card${kind === "address" ? " is-selected" : ""}`}
-                onClick={() => setKind("address")}
+                onClick={() => {
+                  setKind("address");
+                  go("label", "fwd");
+                }}
               >
                 <strong>Single address</strong>
                 <span>One bc1… / 3… / 1… address</span>
@@ -357,11 +384,13 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
               <button
                 type="button"
                 className="text-link"
-                onClick={() => setKind("manual")}
+                onClick={() => {
+                  setKind("manual");
+                  go("label", "fwd");
+                }}
               >
                 Or a notes-only estimate
               </button>
-              {kind === "manual" ? " — selected" : ""}
             </p>
           </>
         ) : null}
@@ -577,23 +606,32 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
 
         {step === "review" ? (
           <>
-            {previewing ? (
-              <p className="muted">Checking the first {gapLimit} receive addresses on Electrum…</p>
+            {savedPending ? (
+              <p className="banner warn">
+                Wallet saved. We&apos;re trying to sync your wallet. The node isn&apos;t answering
+                yet — check back later.
+              </p>
             ) : null}
-            {preview && !preview.emptyWatch && preview.reachable ? (
+            {previewing && !savedPending ? (
+              <p className="banner warn">
+                We&apos;re trying to sync your wallet. You can add it now and check back later if
+                the node isn&apos;t up.
+              </p>
+            ) : null}
+            {preview && !preview.emptyWatch && preview.reachable && !savedPending ? (
               <p className="banner">
                 Found activity. Watching {preview.addressCount} address
                 {preview.addressCount === 1 ? "" : "es"}
                 {preview.accountPath ? ` at ${preview.accountPath}` : ""}.
               </p>
             ) : null}
-            {preview && !preview.reachable ? (
+            {preview && !preview.reachable && !savedPending ? (
               <p className="banner warn">
-                Electrum was unreachable, so we could not confirm activity. You can still add the
-                wallet and sync later.
+                The node isn&apos;t answering yet. Add the wallet now. We&apos;re trying to sync
+                it — check back later.
               </p>
             ) : null}
-            {preview?.emptyWatch ? (
+            {preview?.emptyWatch && !savedPending ? (
               <div className="banner warn">
                 <p>
                   No transactions on the first {preview.gapLimit} receive addresses. If this
@@ -631,17 +669,20 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
           type="button"
           className="scoop-btn ghost"
           onClick={back}
-          disabled={busy || previewing || (stepIndex === 0 && !hasWallets)}
+          disabled={busy || (stepIndex === 0 && !hasWallets)}
         >
           {stepIndex === 0 && hasWallets ? "Cancel" : "Back"}
         </button>
         <button
           type="button"
           className={`scoop-btn${busy ? " is-busy" : ""}`}
-          onClick={next}
-          disabled={!canProceed || busy || previewing}
+          onClick={() => {
+            if (savedPending) onClose();
+            else next();
+          }}
+          disabled={savedPending ? false : !canProceed || busy}
         >
-          {busy ? "Saving…" : isLast ? "Add wallet" : "Next"}
+          {savedPending ? "Done" : busy ? "Saving…" : isLast ? "Add wallet" : "Next"}
         </button>
       </div>
     </section>

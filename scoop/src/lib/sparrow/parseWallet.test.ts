@@ -60,4 +60,28 @@ describe("sparrow wallet file", () => {
     const file = sealSparrowForTest("{}", priv, Buffer.alloc(32, 0x44), Buffer.alloc(16, 1));
     await assert.rejects(() => inspectSparrowWallet(file), /password/i);
   });
+
+  it("reads an Electrum hardware keystore export", async () => {
+    const raw = Buffer.from(
+      JSON.stringify({
+        keystore: {
+          xpub: ZPUB,
+          hw_type: "coldcard",
+          root_fingerprint: "aabbccdd",
+          label: "Coldcard",
+          type: "hardware",
+          derivation: "m/84'/0'/0'",
+        },
+        wallet_type: "standard",
+        use_encryption: false,
+      })
+    );
+    const view = await inspectSparrowWallet(raw);
+    assert.equal(view.name, "Coldcard");
+    assert.equal(view.accounts.length, 1);
+    assert.equal(view.accounts[0].xpub, ZPUB);
+    assert.equal(view.accounts[0].derivationPath, "m/84'/0'/0'");
+    assert.equal(view.accounts[0].masterFingerprint, "aabbccdd");
+    assert.match(view.note, /Electrum/i);
+  });
 });
