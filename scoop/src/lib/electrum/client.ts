@@ -147,6 +147,14 @@ export class ElectrumClient {
     return this.call("blockchain.scripthash.get_balance", [scripthash]);
   }
 
+  async getTransaction(txid: string): Promise<string> {
+    const hex = await this.call("blockchain.transaction.get", [txid]);
+    if (typeof hex !== "string" || !/^[0-9a-fA-F]+$/.test(hex.trim())) {
+      throw new Error("electrum transaction missing");
+    }
+    return hex.trim();
+  }
+
   async getBlockHeader(height: number): Promise<string> {
     const header = await this.call("blockchain.block.header", [height]);
     if (typeof header !== "string" || !header.trim()) {

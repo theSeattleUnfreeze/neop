@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { CoinTable, type ScriptWitness } from "@/components/CoinTable";
 import { SplitChecklist } from "@/components/SplitChecklist";
+import { SplitForkList } from "@/components/SplitFork";
+import type { CoinFork } from "@/lib/fork/forks";
 import { formatActivityStamp } from "@/lib/catalog/activity";
 import { filterCatalogRows, type CatalogFilter } from "@/lib/catalog/presence";
 import type { OutpointRow } from "@/lib/catalog/outpoints";
@@ -70,10 +72,15 @@ export function AccountDetailClient({ id }: Props) {
   const [busy, setBusy] = useState(false);
   const [watching, setWatching] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [forks, setForks] = useState<CoinFork[]>([]);
   const [filter, setFilter] = useState<CatalogFilter>("all");
   const [editOpen, setEditOpen] = useState(false);
   const syncInFlight = useRef(false);
   const accountSource = useRef<Account["source"] | null>(null);
+  /** Unsaved name, notes, reminder, or estimates. Background reload must not clobber these. */
+  const draftDirty = useRef(false);
+  /** False after a sync error. The 10s poll stays quiet until Sync now succeeds. */
+  const watchOk = useRef(true);
 
   const applyPayload = useCallback((json: {
     account?: Account;
@@ -86,8 +93,20 @@ export function AccountDetailClient({ id }: Props) {
     explorers?: ExplorerBases;
   }) => {
     if (json.account) {
-      setAccount(json.account);
       accountSource.current = json.account.source;
+      if (json.account.source === "electrum" && watchOk.current) setWatching(true);
+      const incoming = json.account;
+      setAccount((prev) => {
+        if (!prev || !draftDirty.current) return incoming;
+        return {
+          ...incoming,
+          label: prev.label,
+          notes: prev.notes,
+          reminder: prev.reminder,
+          manualCoreSats: prev.manualCoreSats,
+          manualKnotsSats: prev.manualKnotsSats,
+        };
+      });
     }
     if (json.rows) setRows(json.rows);
     if (json.scripts) setScripts(json.scripts);
@@ -107,6 +126,13 @@ export function AccountDetailClient({ id }: Props) {
       return null;
     }
     applyPayload(json);
+    try {
+      const splits = await fetch(`/api/organizer/splits?accountId=${id}`);
+      const splitsJson = await splits.json();
+      if (splits.ok && Array.isArray(splitsJson.forks)) setForks(splitsJson.forks);
+    } catch {
+      /* wallet details still load when the splits route is down */
+    }
     return json.account as Account;
   }, [id, applyPayload]);
 
@@ -117,13 +143,24 @@ export function AccountDetailClient({ id }: Props) {
       if (opts.manual) {
         setBusy(true);
         setSyncMsg(null);
-      } else {
-        setWatching(true);
       }
       try {
         const res = await fetch(`/api/organizer/accounts/${id}/sync`, { method: "POST" });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "sync failed");
+        if (json.pending) {
+          watchOk.current = false;
+          setWatching(false);
+          setHealth({
+            fulcrumError: json.health?.fulcrumError,
+            shulcrumError: json.health?.shulcrumError,
+          });
+          setError("Electrum did not answer. Watching stopped.");
+          return;
+        }
+        watchOk.current = true;
+        setWatching(true);
+        setError(null);
         setHealth({
           fulcrumError: json.health?.fulcrumError,
           shulcrumError: json.health?.shulcrumError,
@@ -141,13 +178,12 @@ export function AccountDetailClient({ id }: Props) {
         // Reload from tip state so receive/sent stamps and spent markers match the DB.
         await load();
       } catch (e) {
-        if (opts.manual) {
-          setError(e instanceof Error ? e.message : String(e));
-        }
+        watchOk.current = false;
+        setWatching(false);
+        setError(e instanceof Error ? e.message : "Watching stopped.");
       } finally {
         syncInFlight.current = false;
         if (opts.manual) setBusy(false);
-        else setWatching(false);
       }
     },
     [id, load]
@@ -160,10 +196,13 @@ export function AccountDetailClient({ id }: Props) {
     void (async () => {
       const acc = await load();
       if (cancelled || !acc || acc.source !== "electrum") return;
-      // Background sync after paint; do not block the first render on Electrum.
+      // Stay on Watching for the whole poll, including the gap between requests.
+      watchOk.current = true;
+      setWatching(true);
       void sync({ manual: false });
       timer = setInterval(() => {
         if (cancelled) return;
+        if (!watchOk.current) return;
         if (accountSource.current !== "electrum") return;
         void sync({ manual: false });
       }, POLL_MS);
@@ -203,6 +242,7 @@ export function AccountDetailClient({ id }: Props) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "save failed");
+      draftDirty.current = false;
       setAccount(json.account);
       setEditOpen(false);
     } catch (e) {
@@ -323,21 +363,30 @@ export function AccountDetailClient({ id }: Props) {
                 <span>Name</span>
                 <input
                   value={account.label}
-                  onChange={(e) => setAccount({ ...account, label: e.target.value })}
+                  onChange={(e) => {
+                    draftDirty.current = true;
+                    setAccount({ ...account, label: e.target.value });
+                  }}
                 />
               </label>
               <label className="field">
                 <span>Notes</span>
                 <input
                   value={account.notes}
-                  onChange={(e) => setAccount({ ...account, notes: e.target.value })}
+                  onChange={(e) => {
+                    draftDirty.current = true;
+                    setAccount({ ...account, notes: e.target.value });
+                  }}
                 />
               </label>
               <label className="field">
                 <span>Reminder</span>
                 <input
                   value={account.reminder}
-                  onChange={(e) => setAccount({ ...account, reminder: e.target.value })}
+                  onChange={(e) => {
+                    draftDirty.current = true;
+                    setAccount({ ...account, reminder: e.target.value });
+                  }}
                 />
               </label>
               {account.source === "manual" ? (
@@ -346,18 +395,20 @@ export function AccountDetailClient({ id }: Props) {
                     <span>Estimated Core sats</span>
                     <input
                       value={account.manualCoreSats ?? ""}
-                      onChange={(e) =>
-                        setAccount({ ...account, manualCoreSats: e.target.value })
-                      }
+                      onChange={(e) => {
+                        draftDirty.current = true;
+                        setAccount({ ...account, manualCoreSats: e.target.value });
+                      }}
                     />
                   </label>
                   <label className="field">
                     <span>Estimated Knots sats</span>
                     <input
                       value={account.manualKnotsSats ?? ""}
-                      onChange={(e) =>
-                        setAccount({ ...account, manualKnotsSats: e.target.value })
-                      }
+                      onChange={(e) => {
+                        draftDirty.current = true;
+                        setAccount({ ...account, manualKnotsSats: e.target.value });
+                      }}
                     />
                   </label>
                 </>
@@ -380,6 +431,16 @@ export function AccountDetailClient({ id }: Props) {
             explorers={explorers}
             onExplorersChange={setExplorers}
           />
+          <section className="scoop-panel">
+            <div className="section-head">
+              <h3>Splits</h3>
+            </div>
+            <p className="muted">
+              Coins from this wallet that were spent on one flavor, or spent as a different
+              transaction on each flavor. Each column is where that spend paid.
+            </p>
+            <SplitForkList forks={forks} />
+          </section>
           <section className="scoop-panel">
             <div className="section-head">
               <h3>Outpoints</h3>
