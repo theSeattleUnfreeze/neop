@@ -134,7 +134,8 @@ function viewOf(
   item: UnspentItem | undefined,
   snap: ScriptTipSnapshot | undefined,
   txid: string,
-  vout: number
+  vout: number,
+  resolvedSpendTxid?: string
 ): TipView {
   if (!snap?.ok) return { status: "absent" };
   if (item) {
@@ -147,16 +148,19 @@ function viewOf(
     };
   }
   // The funding transaction is in this tip's history, and the outpoint is not unspent:
-  // this tip already spent it. A history entry for a different txid is not this coin.
+  // this tip already spent it. The spend txid comes from a decoded input, not a history guess.
   const seen = snap.history.some((h) => h.tx_hash.toLowerCase() === txid);
   if (!seen) return { status: "absent" };
-  const spend = snap.history.find((h) => h.tx_hash.toLowerCase() !== txid);
+  const spendTxid = resolvedSpendTxid?.toLowerCase();
+  const spend = spendTxid
+    ? snap.history.find((h) => h.tx_hash.toLowerCase() === spendTxid)
+    : undefined;
   return {
     status: "spent",
     txid,
     vout,
-    spendTxid: spend?.tx_hash,
-    confirmedHeight: spend?.height,
+    spendTxid,
+    confirmedHeight: spend && spend.height > 0 ? spend.height : undefined,
   };
 }
 
@@ -165,13 +169,34 @@ export function outpointRowsFromTips(
   address: string | null | undefined,
   core: ScriptTipSnapshot | undefined,
   knots: ScriptTipSnapshot | undefined,
-  opts: { accountId?: number | null; watchAccountId?: number | null } = {}
+  opts: {
+    accountId?: number | null;
+    watchAccountId?: number | null;
+    /** prev outpoint key → spend txid, from a decoded spend on that tip. */
+    resolvedSpends?: {
+      core?: ReadonlyMap<string, string>;
+      knots?: ReadonlyMap<string, string>;
+    };
+  } = {}
 ): OutpointRow[] {
   const classified = tipAnswered(core) && tipAnswered(knots);
   const witness = witnessFromTips(core, knots);
   return collectLive(core, knots).map((side) => {
-    const coreView = viewOf(side.core, core, side.txid, side.vout);
-    const knotsView = viewOf(side.knots, knots, side.txid, side.vout);
+    const key = `${side.txid.toLowerCase()}:${side.vout}`;
+    const coreView = viewOf(
+      side.core,
+      core,
+      side.txid,
+      side.vout,
+      opts.resolvedSpends?.core?.get(key)
+    );
+    const knotsView = viewOf(
+      side.knots,
+      knots,
+      side.txid,
+      side.vout,
+      opts.resolvedSpends?.knots?.get(key)
+    );
     const annotated = annotate({
       scriptId,
       address,
