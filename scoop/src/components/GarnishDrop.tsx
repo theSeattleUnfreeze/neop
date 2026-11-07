@@ -8,6 +8,7 @@ import { garnishPageOrder } from "@/lib/psbt/garnishPages";
 import { inspectPsbt } from "@/lib/broadcast/inspectPsbt";
 import { SplitSteps } from "@/components/SplitSteps";
 import { WalletIntake } from "@/components/WalletIntake";
+import { DatacarrierAssist } from "@/components/DatacarrierAssist";
 
 const KIND_LABEL: Record<PayloadKind, string> = {
   bytes: "raw bytes",
@@ -186,17 +187,7 @@ export function GarnishDrop() {
             {reason}
           </p>
         ))}
-        <p className="banner warn">
-          Bitcoin Core 28 keeps an 83-byte datacarrier limit unless{" "}
-          <span className="mono">datacarriersize</span> is at least 120. A garnish script is at most
-          120 bytes. Core reads that setting when it starts, and there is no RPC to raise it for
-          one send and put it back afterward. A restart to restore the old limit would drop the
-          unconfirmed garnish.{" "}
-          <Link href="/stack?service=core-node#datacarrier">
-            Set datacarriersize=120, restart Core once, and leave it until the transactions are in a block
-          </Link>
-          . Leave Core running while Fulcrum is still downloading blocks.
-        </p>
+        <DatacarrierAssist />
         <label className="field">
           <span>Unsigned PSBTs</span>
           <input

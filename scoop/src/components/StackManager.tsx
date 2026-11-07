@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { StackGlance } from "@/components/StackGlance";
 import { StackRecover, type StackDiagnosisView } from "@/components/StackRecover";
 import { StackServiceEditor } from "@/components/StackServiceEditor";
-import type { StackConfig, StackService, StackServiceId, StackStatusRow } from "@/lib/stack/types";
+import { STACK_SERVICE_IDS, type StackConfig, type StackService, type StackServiceId, type StackStatusRow } from "@/lib/stack/types";
 
 const LOCAL = { "content-type": "application/json", "x-scoop-local": "1" };
 
@@ -51,6 +51,13 @@ export function StackManager() {
     void loadConfig().catch((err) => setError(err instanceof Error ? err.message : String(err)));
     void loadStatus().catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, [loadConfig, loadStatus]);
+
+  useEffect(() => {
+    const service = new URLSearchParams(window.location.search).get("service");
+    if (service && (STACK_SERVICE_IDS as readonly string[]).includes(service)) {
+      setFocusId(service as StackServiceId);
+    }
+  }, []);
 
   const patch = (id: StackServiceId, key: keyof StackService, value: string) => {
     setConfig((current) => {
