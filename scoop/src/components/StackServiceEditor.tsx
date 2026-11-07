@@ -79,6 +79,11 @@ export function StackServiceEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, svc.id]);
 
+  useEffect(() => {
+    if (mode !== "dialog" || svc.id !== "core-node" || window.location.hash !== "#datacarrier") return;
+    document.getElementById("datacarrier")?.scrollIntoView({ block: "nearest" });
+  }, [svc.id, mode]);
+
   const body = (
     <section className={`scoop-panel stack-service-editor${mode === "dialog" ? " is-dialog" : ""}`}>
       <div className="section-head">
@@ -109,6 +114,35 @@ export function StackServiceEditor({
         </span>
       </div>
       {row?.detail ? <p className="muted">{row.detail}</p> : statusPending ? <p className="muted">Checking…</p> : null}
+      {svc.id === "core-node" ? (
+        <div id={mode === "dialog" ? "datacarrier" : undefined} className="banner warn">
+          <p>
+            {svc.configFile ? (
+              <>
+                This node’s bitcoin.conf is <span className="mono stack-path">{svc.configFile}</span>.{" "}
+              </>
+            ) : (
+              <>Scoop has not found a bitcoin.conf for the running Core node yet. </>
+            )}
+            A garnish needs <span className="mono">datacarriersize=120</span> in that file. Core
+            reads the line when it starts. There is no RPC to raise it for one send and put it
+            back afterward. Restarting again to restore the 83-byte limit reloads the mempool under
+            that limit and drops the garnish before it is mined. Leave 120 in place until those
+            Core transactions are in a block.
+          </p>
+          <ol className="howto-steps">
+            <li>
+              Stop with the button above once the bitcoind path and data directory below are filled.
+              Scoop calls bitcoin-cli with the cookie in that data directory. Leave Core running
+              while Fulcrum is still downloading blocks.
+            </li>
+            <li>
+              Show bitcoin.conf in Explorer and add <span className="mono">datacarriersize=120</span> on its own line.
+            </li>
+            <li>Start Core, and wait until this panel shows it is up before you broadcast.</li>
+          </ol>
+        </div>
+      ) : null}
       {STACK_FIELDS[svc.id].map((field) => {
         const value = String(svc[field.key] ?? "");
         return (
