@@ -91,17 +91,41 @@ export const utxoSnapshots = pgTable(
   (t) => [uniqueIndex("utxo_snapshots_tip_outpoint_uidx").on(t.tip, t.txid, t.vout)]
 );
 
-export const spendEvents = pgTable("spend_events", {
-  id: serial("id").primaryKey(),
-  scriptId: integer("script_id")
-    .notNull()
-    .references(() => watchedScripts.id, { onDelete: "cascade" }),
-  tip: tipEnum("tip").notNull(),
-  txid: text("txid").notNull(),
-  prevTxid: text("prev_txid").notNull(),
-  prevVout: integer("prev_vout").notNull(),
-  detectedAt: timestamp("detected_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const spendEvents = pgTable(
+  "spend_events",
+  {
+    id: serial("id").primaryKey(),
+    scriptId: integer("script_id")
+      .notNull()
+      .references(() => watchedScripts.id, { onDelete: "cascade" }),
+    tip: tipEnum("tip").notNull(),
+    txid: text("txid").notNull(),
+    prevTxid: text("prev_txid").notNull(),
+    prevVout: integer("prev_vout").notNull(),
+    /** Parent output value, when the funding output was decoded or already stored. */
+    valueSats: bigint("value_sats", { mode: "bigint" }),
+    detectedAt: timestamp("detected_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("spend_events_prev_uidx").on(t.scriptId, t.tip, t.prevTxid, t.prevVout),
+  ]
+);
+
+/** Outputs of a recorded spend. One hop from the parent outpoint on that tip. */
+export const spendOutputs = pgTable(
+  "spend_outputs",
+  {
+    id: serial("id").primaryKey(),
+    spendEventId: integer("spend_event_id")
+      .notNull()
+      .references(() => spendEvents.id, { onDelete: "cascade" }),
+    vout: integer("vout").notNull(),
+    valueSats: bigint("value_sats", { mode: "bigint" }).notNull(),
+    address: text("address"),
+    scriptLabel: text("script_label").notNull(),
+  },
+  (t) => [uniqueIndex("spend_outputs_event_vout_uidx").on(t.spendEventId, t.vout)]
+);
 
 export const syncState = pgTable("sync_state", {
   id: serial("id").primaryKey(),

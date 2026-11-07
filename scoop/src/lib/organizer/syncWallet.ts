@@ -8,6 +8,7 @@ import {
 import { createBlockTimeResolver, type BlockTimeResolver } from "@/lib/electrum/blockTime";
 import { ElectrumClient } from "@/lib/electrum/client";
 import { anyElectrumReachable } from "@/lib/electrum/discoverXpub";
+import { recordScriptSpends } from "@/lib/fork/recordSpends";
 import { envElectrumUrls, fetchScriptTip } from "@/lib/sync/fetchTip";
 import {
   applyReplayReceiveSync,
@@ -21,6 +22,28 @@ import {
   organizerTasks,
   watchedScripts,
 } from "@/lib/db/schema";
+
+function cachedTxGetter(
+  client: ElectrumClient | null
+): (txid: string) => Promise<string | null> {
+  const cache = new Map<string, string | null>();
+  return async (txid) => {
+    const key = txid.toLowerCase();
+    if (cache.has(key)) return cache.get(key) ?? null;
+    if (!client) {
+      cache.set(key, null);
+      return null;
+    }
+    try {
+      const hex = await client.getTransaction(key);
+      cache.set(key, hex);
+      return hex;
+    } catch {
+      cache.set(key, null);
+      return null;
+    }
+  };
+}
 
 function tipTimes(url: string | undefined): { client: ElectrumClient; times: BlockTimeResolver } | null {
   if (!url) return null;
@@ -75,6 +98,8 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
   let knotsError: string | null = null;
   const coreTip = tipTimes(urls.fulcrum);
   const knotsTip = tipTimes(urls.shulcrum);
+  const coreTx = cachedTxGetter(coreTip?.client ?? null);
+  const knotsTx = cachedTxGetter(knotsTip?.client ?? null);
   try {
     for (const s of scripts) {
       const core = urls.fulcrum
@@ -104,9 +129,34 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
           suggestedTasks: 0,
         };
       }
+      const coreSpends = core?.ok
+        ? await recordScriptSpends({
+            db,
+            scriptId: s.id,
+            tip: "core",
+            scriptPubKeyHex: s.scriptPubKeyHex,
+            address: s.address,
+            history: core.history,
+            unspent: core.unspent,
+            getTxHex: coreTx,
+          })
+        : new Map<string, string>();
+      const knotsSpends = knots?.ok
+        ? await recordScriptSpends({
+            db,
+            scriptId: s.id,
+            tip: "knots",
+            scriptPubKeyHex: s.scriptPubKeyHex,
+            address: s.address,
+            history: knots.history,
+            unspent: knots.unspent,
+            getTxHex: knotsTx,
+          })
+        : new Map<string, string>();
       const live = outpointRowsFromTips(s.id, s.address, core, knots, {
         accountId: s.accountId,
         watchAccountId: s.accountId,
+        resolvedSpends: { core: coreSpends, knots: knotsSpends },
       });
       rows.push(...live);
       const witnessState = witnessFromTips(core, knots);

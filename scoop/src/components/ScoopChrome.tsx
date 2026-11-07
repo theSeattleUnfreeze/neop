@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ClipboardList,
+  GitFork,
   IceCreamCone,
   LayoutDashboard,
   Server,
@@ -16,6 +17,7 @@ const NAV = [
   { href: "/", label: "Dashboard", Icon: LayoutDashboard, exact: true },
   { href: "/stack", label: "Stack", Icon: Server },
   { href: "/wallets", label: "Wallets", Icon: Wallet },
+  { href: "/splits", label: "Splits", Icon: GitFork },
   { href: "/garnish", label: "Garnish", Icon: Stamp },
   { href: "/tasks", label: "Tasks", Icon: ClipboardList },
 ];

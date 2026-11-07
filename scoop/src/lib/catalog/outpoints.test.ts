@@ -56,8 +56,27 @@ describe("outpoint rows", () => {
     );
     assert.equal(rows.length, 1);
     assert.equal(rows[0].core.status, "spent");
+    assert.equal(rows[0].core.spendTxid, undefined);
     assert.equal(rows[0].coreBoundOk, true);
     assert.equal(rows[0].replayRisk, false);
+  });
+
+  it("attaches a decoded spend txid when the caller resolved that input", () => {
+    const txid = "aa".repeat(32);
+    const spend = "dd".repeat(32);
+    const rows = outpointRowsFromTips(
+      5,
+      "bc1q",
+      snap("core", [], [
+        { tx_hash: txid, height: 1 },
+        { tx_hash: "bb".repeat(32), height: 2 },
+        { tx_hash: spend, height: 3 },
+      ]),
+      snap("knots", [{ tx_hash: txid, tx_pos: 0, value: 42, height: 1 }]),
+      { resolvedSpends: { core: new Map([[`${txid}:0`, spend]]) } }
+    );
+    assert.equal(rows[0].core.spendTxid, spend);
+    assert.equal(rows[0].core.confirmedHeight, 3);
   });
 
   it("does not treat spent history on one tip as the other tip's live outpoint", () => {
