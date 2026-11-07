@@ -67,8 +67,12 @@ export async function revealInExplorer(config: StackConfig, target: string): Pro
     child.unref();
     return;
   }
-  const opener = process.platform === "darwin" ? "open" : "xdg-open";
-  const child = spawn(opener, [path.dirname(resolved)], { detached: true, stdio: "ignore" });
+  if (process.platform === "darwin") {
+    const child = spawn("open", ["-R", resolved], { detached: true, stdio: "ignore" });
+    child.unref();
+    return;
+  }
+  const child = spawn("xdg-open", [path.dirname(resolved)], { detached: true, stdio: "ignore" });
   child.unref();
 }
 
