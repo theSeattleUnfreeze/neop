@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { localOnly } from "@/lib/api/localOnly";
 import { loadStackConfig } from "@/lib/stack/config";
+import { discoverStackPaths } from "@/lib/stack/discover";
 import { diagnoseStack } from "@/lib/stack/diagnose";
 
 export const runtime = "nodejs";
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
   const denied = localOnly(req);
   if (denied) return denied;
   try {
-    const config = loadStackConfig();
+    const config = await discoverStackPaths(loadStackConfig());
     const diagnoses = await diagnoseStack(config.services);
     return NextResponse.json({ platform: diagnoses[0]?.platform ?? process.platform, diagnoses });
   } catch (err) {
