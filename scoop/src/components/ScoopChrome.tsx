@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BookOpen,
   ClipboardList,
   GitFork,
   HardDrive,
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/wallets", label: "Wallets", Icon: Wallet },
   { href: "/splits", label: "Splits", Icon: GitFork },
   { href: "/garnish", label: "Garnish", Icon: Stamp },
+  { href: "/howto", label: "How to", Icon: BookOpen },
   { href: "/tasks", label: "Tasks", Icon: ClipboardList },
   { href: "/backup", label: "Backup", Icon: HardDrive },
 ];
