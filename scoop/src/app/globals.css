@@ -69,6 +69,19 @@ a {
   margin-bottom: 1.25rem;
 }
 
+.scoop-backup-note {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 2px solid var(--scoop-border);
+  background: var(--scoop-panel);
+  font-size: 0.9rem;
+}
+
+.scoop-backup-note a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .scoop-ln-note {
   margin: -0.5rem 0 1.25rem;
   font-size: 0.85rem;

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   ClipboardList,
   GitFork,
+  HardDrive,
   IceCreamCone,
   LayoutDashboard,
   Server,
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/splits", label: "Splits", Icon: GitFork },
   { href: "/garnish", label: "Garnish", Icon: Stamp },
   { href: "/tasks", label: "Tasks", Icon: ClipboardList },
+  { href: "/backup", label: "Backup", Icon: HardDrive },
 ];
 
 export function ScoopChrome({ children }: { children: React.ReactNode }) {
@@ -52,6 +54,10 @@ export function ScoopChrome({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+      <p className="scoop-backup-note">
+        Wallets live in Scoop’s local database. Clearing this browser does not remove them.{" "}
+        <Link href="/backup">Save an encrypted backup</Link> on your disk so you can restore them.
+      </p>
       <p className="scoop-ln-note muted">
         Lightning channels: follow the{" "}
         <a
