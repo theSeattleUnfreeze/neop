@@ -1,4 +1,5 @@
 import type { ScoopDb } from "@/lib/db/client";
+import { receivedStamp } from "@/lib/catalog/activity";
 import { annotate, type CoinRow, type TipView } from "@/lib/catalog/presence";
 import type { OutpointRow, WitnessState } from "@/lib/catalog/outpoints";
 import type { AnnotatedRow } from "@/lib/catalog/balances";
@@ -12,6 +13,8 @@ type StoredTip = {
   outpointVout: number;
   status: "unspent" | "spent" | "absent";
   valueSats: bigint | null;
+  confirmedHeight: number | null;
+  confirmedAt: Date | null;
 };
 
 function asWitness(value: string | null | undefined): WitnessState {
@@ -38,15 +41,19 @@ export function outpointRowsFromStored(
   }
   const view = (state: StoredTip | undefined, txid: string, vout: number): TipView => {
     if (!state) return { status: "absent" };
+    const confirmedHeight = state.confirmedHeight ?? undefined;
+    const confirmedAt = state.confirmedAt?.toISOString();
     if (state.status === "unspent") {
       return {
         status: "unspent",
         txid,
         vout,
         valueSats: Number(state.valueSats ?? 0n),
+        confirmedHeight,
+        confirmedAt,
       };
     }
-    return { status: "spent", txid, vout };
+    return { status: "spent", txid, vout, confirmedHeight, confirmedAt };
   };
   return [...map.values()]
     .sort((a, b) => a.txid.localeCompare(b.txid) || a.vout - b.vout)
@@ -55,6 +62,7 @@ export function outpointRowsFromStored(
       const knots = view(side.knots, side.txid, side.vout);
       const coin: CoinRow = { scriptId, address, core, knots };
       const annotated = annotate(coin);
+      const received = receivedStamp(core, knots);
       return {
         ...annotated,
         txid: side.txid,
@@ -62,6 +70,8 @@ export function outpointRowsFromStored(
         replayRisk: core.status === "unspent" && knots.status === "unspent",
         classified: true,
         witness,
+        receivedHeight: received.height,
+        receivedAt: received.at?.toISOString() ?? null,
         accountId: watchAccountId,
         watchAccountId,
       };
@@ -99,6 +109,8 @@ export async function loadOrganizerRowsFromTipState(
       outpointVout: r.outpointVout,
       status: r.status,
       valueSats: r.valueSats,
+      confirmedHeight: r.confirmedHeight,
+      confirmedAt: r.confirmedAt,
     });
     byScript.set(r.scriptId, list);
   }

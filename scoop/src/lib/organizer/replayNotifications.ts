@@ -12,7 +12,8 @@ import {
   shouldCreateReplayAlert,
   type PriorTipOutpoint,
 } from "@/lib/catalog/replayReceive";
-import type { UnspentItem } from "@/lib/sync/fetchTip";
+import type { BlockTimeResolver } from "@/lib/electrum/blockTime";
+import type { HistoryItem, UnspentItem } from "@/lib/sync/fetchTip";
 import { and, eq } from "drizzle-orm";
 
 export type ReplaySyncInput = {
@@ -23,6 +24,13 @@ export type ReplaySyncInput = {
   address?: string | null;
   coreUnspent: UnspentItem[];
   knotsUnspent: UnspentItem[];
+  coreHistory?: HistoryItem[];
+  knotsHistory?: HistoryItem[];
+  /** Prefer tip-specific resolvers so post-fork heights map to the right chain. */
+  coreTimes?: BlockTimeResolver;
+  knotsTimes?: BlockTimeResolver;
+  /** @deprecated use coreTimes / knotsTimes */
+  times?: BlockTimeResolver;
   /** Live outpoint rows for this script, so a Core spend is kept even on the first sync that sees it. */
   liveOutpoints?: { txid: string; vout: number; core: { status: string }; knots: { status: string } }[];
 };
@@ -37,27 +45,121 @@ export type ReplaySyncResult = {
   }[];
 };
 
-/** Replace stored unspent outpoints for one tip. Leaves the other tip's rows intact. */
+async function stampForHeight(
+  height: number | null | undefined,
+  times?: BlockTimeResolver
+): Promise<{ confirmedHeight: number | null; confirmedAt: Date | null }> {
+  if (height == null || height <= 0) return { confirmedHeight: height ?? null, confirmedAt: null };
+  const confirmedAt = times ? await times.timeForHeight(height) : null;
+  return { confirmedHeight: height, confirmedAt };
+}
+
+function outpointKey(txid: string, vout: number): string {
+  return `${txid.toLowerCase()}:${vout}`;
+}
+
+/**
+ * Replace tip state for one tip. Live unspent rows are rewritten from Electrum;
+ * spent markers are kept (and newly detected) so Last Sent can survive a sync.
+ */
 export async function replaceTipUnspent(
   db: ScoopDb,
   scriptId: number,
   tip: "core" | "knots",
-  unspent: UnspentItem[]
+  unspent: UnspentItem[],
+  times?: BlockTimeResolver,
+  history: HistoryItem[] = []
 ): Promise<void> {
+  const prior = await db
+    .select()
+    .from(scriptTipState)
+    .where(and(eq(scriptTipState.scriptId, scriptId), eq(scriptTipState.tip, tip)));
+  const liveKeys = new Set(unspent.map((u) => outpointKey(u.tx_hash, u.tx_pos)));
+
+  const spentByKey = new Map<
+    string,
+    { txid: string; vout: number; confirmedHeight: number | null; confirmedAt: Date | null }
+  >();
+  for (const row of prior) {
+    const key = outpointKey(row.outpointTxid, row.outpointVout);
+    if (liveKeys.has(key)) continue;
+    if (row.status === "spent") {
+      spentByKey.set(key, {
+        txid: row.outpointTxid,
+        vout: row.outpointVout,
+        confirmedHeight: row.confirmedHeight,
+        confirmedAt: row.confirmedAt,
+      });
+    } else if (row.status === "unspent") {
+      // Newly spent on this tip since the last sync.
+      spentByKey.set(key, {
+        txid: row.outpointTxid,
+        vout: row.outpointVout,
+        confirmedHeight: null,
+        confirmedAt: null,
+      });
+    }
+  }
+
   await db
     .delete(scriptTipState)
     .where(and(eq(scriptTipState.scriptId, scriptId), eq(scriptTipState.tip, tip)));
-  if (!unspent.length) return;
-  await db.insert(scriptTipState).values(
-    unspent.map((u) => ({
+
+  const rows = [];
+  for (const u of unspent) {
+    const stamp = await stampForHeight(u.height, times);
+    rows.push({
       scriptId,
       tip,
       outpointTxid: u.tx_hash.toLowerCase(),
       outpointVout: u.tx_pos,
       status: "unspent" as const,
       valueSats: BigInt(u.value),
-    }))
-  );
+      confirmedHeight: stamp.confirmedHeight,
+      confirmedAt: stamp.confirmedAt,
+    });
+  }
+  for (const spent of spentByKey.values()) {
+    let height = spent.confirmedHeight;
+    let at = spent.confirmedAt;
+    if (height == null || height <= 0 || !at) {
+      const stamp = await stampForHeight(spendHeightForOutpoint(history, spent.txid), times);
+      if (height == null || height <= 0) height = stamp.confirmedHeight;
+      if (!at) at = stamp.confirmedAt;
+    }
+    rows.push({
+      scriptId,
+      tip,
+      outpointTxid: spent.txid.toLowerCase(),
+      outpointVout: spent.vout,
+      status: "spent" as const,
+      valueSats: null,
+      confirmedHeight: height,
+      confirmedAt: at,
+    });
+  }
+  if (rows.length) await db.insert(scriptTipState).values(rows);
+}
+
+/** Confirm height of a spend: first history tx after the funding confirm. */
+export function spendHeightForOutpoint(
+  history: HistoryItem[],
+  fundingTxid: string
+): number | null {
+  const funding = fundingTxid.toLowerCase();
+  const fundingHeight =
+    history.find((h) => h.tx_hash.toLowerCase() === funding)?.height ?? 0;
+  const spends = history
+    .filter(
+      (h) =>
+        h.tx_hash.toLowerCase() !== funding &&
+        h.height > 0 &&
+        (fundingHeight <= 0 || h.height >= fundingHeight)
+    )
+    .sort((a, b) => a.height - b.height);
+  // Prefer a tx strictly after the funding block when we know the funding height.
+  const after = fundingHeight > 0 ? spends.find((h) => h.height > fundingHeight) : undefined;
+  return (after ?? spends[0])?.height ?? null;
 }
 
 /**
@@ -146,8 +248,26 @@ export async function applyReplayReceiveSync(
     }
   }
 
-  await replaceTipUnspent(db, scriptId, "core", input.coreUnspent);
-  await replaceTipUnspent(db, scriptId, "knots", input.knotsUnspent);
+  const coreTimes = input.coreTimes ?? input.times;
+  const knotsTimes = input.knotsTimes ?? input.times;
+  await replaceTipUnspent(
+    db,
+    scriptId,
+    "core",
+    input.coreUnspent,
+    coreTimes,
+    input.coreHistory ?? []
+  );
+  await replaceTipUnspent(
+    db,
+    scriptId,
+    "knots",
+    input.knotsUnspent,
+    knotsTimes,
+    input.knotsHistory ?? []
+  );
+  // Cross-tip spent markers (e.g. Core spent / Knots still live) that single-tip
+  // preservation above may not have seen yet on a fresh dual sync.
   const markers = [
     ...persistedSpentMarkers(prior, input.coreUnspent, input.knotsUnspent),
     ...spentMarkersFromOutpoints(input.liveOutpoints ?? []),
@@ -155,17 +275,33 @@ export async function applyReplayReceiveSync(
     const id = `${marker.tip}:${marker.txid}:${marker.vout}`;
     return all.findIndex((other) => `${other.tip}:${other.txid}:${other.vout}` === id) === index;
   });
-  if (markers.length) {
-    await db.insert(scriptTipState).values(
-      markers.map((marker) => ({
-        scriptId,
-        tip: marker.tip,
-        outpointTxid: marker.txid,
-        outpointVout: marker.vout,
-        status: "spent" as const,
-        valueSats: null,
-      }))
-    );
+  for (const marker of markers) {
+    const exists = await db
+      .select({ id: scriptTipState.id })
+      .from(scriptTipState)
+      .where(
+        and(
+          eq(scriptTipState.scriptId, scriptId),
+          eq(scriptTipState.tip, marker.tip),
+          eq(scriptTipState.outpointTxid, marker.txid),
+          eq(scriptTipState.outpointVout, marker.vout)
+        )
+      )
+      .limit(1);
+    if (exists.length) continue;
+    const history = marker.tip === "core" ? input.coreHistory ?? [] : input.knotsHistory ?? [];
+    const tipTimes = marker.tip === "core" ? coreTimes : knotsTimes;
+    const stamp = await stampForHeight(spendHeightForOutpoint(history, marker.txid), tipTimes);
+    await db.insert(scriptTipState).values({
+      scriptId,
+      tip: marker.tip,
+      outpointTxid: marker.txid,
+      outpointVout: marker.vout,
+      status: "spent",
+      valueSats: null,
+      confirmedHeight: stamp.confirmedHeight,
+      confirmedAt: stamp.confirmedAt,
+    });
   }
 
   return { hits, newNotifications };

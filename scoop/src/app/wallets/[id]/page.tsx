@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { AccountDetailClient } from "@/components/AccountDetailClient";
 
 export default async function WalletDetailPage({
@@ -17,5 +18,9 @@ export default async function WalletDetailPage({
       </section>
     );
   }
-  return <AccountDetailClient id={walletId} />;
+  return (
+    <Suspense fallback={<p className="muted">Loading…</p>}>
+      <AccountDetailClient id={walletId} />
+    </Suspense>
+  );
 }

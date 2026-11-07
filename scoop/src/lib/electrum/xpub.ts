@@ -7,7 +7,13 @@ import { DEFAULT_GAP_LIMIT, MAX_GAP_LIMIT, MIN_GAP_LIMIT } from "@/lib/electrum/
 bitcoin.initEccLib(ecc);
 const bip32 = BIP32Factory(ecc);
 
-export type ScriptKind = "p2pkh" | "p2shp2wpkh" | "p2wpkh" | "p2tr";
+export type ScriptKind =
+  | "p2pkh"
+  | "p2shp2wpkh"
+  | "p2wpkh"
+  | "p2tr"
+  | "p2wsh"
+  | "p2shp2wsh";
 
 export type DerivedWatchScript = {
   address: string;
@@ -175,6 +181,9 @@ export function addressFromPubkey(
     });
     if (!payment.address || !payment.output) throw new Error("p2shp2wpkh encode failed");
     return { address: payment.address, scriptPubKey: payment.output };
+  }
+  if (kind === "p2wsh" || kind === "p2shp2wsh") {
+    throw new Error("multisig scripts need expandMultisigAccount");
   }
   const xOnly = publicKey.length === 33 ? publicKey.subarray(1, 33) : publicKey;
   const payment = bitcoin.payments.p2tr({ internalPubkey: xOnly, network });

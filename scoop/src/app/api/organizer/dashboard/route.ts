@@ -79,12 +79,25 @@ export async function GET() {
     unreadNotifs.map((n) => [n.accountId, Number(n.count)])
   );
 
-  const cards = accounts.map((a, i) => ({
-    account: a,
-    balance: balances[i],
-    openTaskCount: taskCountByAccount.get(a.id) ?? 0,
-    unreadNotificationCount: notifCountByAccount.get(a.id) ?? 0,
-  }));
+  const { loadAccountActivity, serializeActivityStamp } = await import(
+    "@/lib/organizer/accountActivity"
+  );
+  const activityByAccount = await loadAccountActivity(
+    db,
+    accounts.map((a) => ({ id: a.id, watchAccountId: a.watchAccountId }))
+  );
+
+  const cards = accounts.map((a, i) => {
+    const activity = activityByAccount.get(a.id);
+    return {
+      account: a,
+      balance: balances[i],
+      openTaskCount: taskCountByAccount.get(a.id) ?? 0,
+      unreadNotificationCount: notifCountByAccount.get(a.id) ?? 0,
+      lastReceived: serializeActivityStamp(activity?.lastReceived ?? { height: null, at: null }),
+      lastSent: serializeActivityStamp(activity?.lastSent ?? { height: null, at: null }),
+    };
+  });
 
   const unreadTotal = [...notifCountByAccount.values()].reduce((a, b) => a + b, 0);
   const openTaskTotal = [...taskCountByAccount.values()].reduce((a, b) => a + b, 0);
