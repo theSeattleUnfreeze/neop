@@ -14,6 +14,10 @@ export type TipView = {
   /** Satoshis from Electrum listunspent (number for JSON-safe API responses). */
   valueSats?: number;
   spendTxid?: string;
+  /** Confirming block height (0 / omitted = mempool or unknown). */
+  confirmedHeight?: number;
+  /** ISO time of that block header when Scoop resolved it. */
+  confirmedAt?: string;
 };
 
 export type CoinRow = {

@@ -72,7 +72,7 @@ Public write-ups, not a neop measurement:
 
 Neop does not restate a search procedure and does not adopt a private estimate of how fast that space falls.
 
-A native-segwit or wrapped multisig output is a **hash** until it is spent. While no spend of that script exists on either chain, someone walking a weak seed space still has to find the combination that hashes to the output. That is the protection of an unpublished descriptor. One cosigner xpub is not that descriptor. Scoop says so when it sees a multisig Sparrow file: it can watch one cosigner, which is not the script.
+A native-segwit or wrapped multisig output is a **hash** until it is spent. While no spend of that script exists on either chain, someone walking a weak seed space still has to find the combination that hashes to the output. That is the protection of an unpublished descriptor. One cosigner xpub is not that descriptor. An Electrum `2of3` (or similar) export that includes every cosigner xpub is enough for Scoop to watch the combined receive scripts. A Sparrow file that only exposes one cosigner is still not the script.
 
 The first spend puts the whole witness script on the chain that sees it: every cosigner public key in that script, plus the signatures. A normal signature does not reveal a private key. The disclosure is the public keys.
 

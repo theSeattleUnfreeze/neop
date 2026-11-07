@@ -1,6 +1,12 @@
 import { eq } from "drizzle-orm";
 import { aggregateAccountBalances } from "@/lib/catalog/balances";
-import { outpointRowsFromTips, witnessFromTips } from "@/lib/catalog/outpoints";
+import {
+  outpointRowsFromTips,
+  witnessExposureFromTips,
+  witnessFromTips,
+} from "@/lib/catalog/outpoints";
+import { createBlockTimeResolver, type BlockTimeResolver } from "@/lib/electrum/blockTime";
+import { ElectrumClient } from "@/lib/electrum/client";
 import { anyElectrumReachable } from "@/lib/electrum/discoverXpub";
 import { envElectrumUrls, fetchScriptTip } from "@/lib/sync/fetchTip";
 import {
@@ -15,6 +21,15 @@ import {
   organizerTasks,
   watchedScripts,
 } from "@/lib/db/schema";
+
+function tipTimes(url: string | undefined): { client: ElectrumClient; times: BlockTimeResolver } | null {
+  if (!url) return null;
+  const client = ElectrumClient.fromUrl(url);
+  return {
+    client,
+    times: createBlockTimeResolver((height) => client.getBlockHeader(height)),
+  };
+}
 
 export async function syncOrganizerWallet(db: ScoopDb, id: number) {
   const [account] = await db
@@ -58,124 +73,163 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
   let knotsOk: boolean | null = null;
   let coreError: string | null = null;
   let knotsError: string | null = null;
-  for (const s of scripts) {
-    const core = urls.fulcrum
-      ? await fetchScriptTip("core", urls.fulcrum, s.electrumScripthash)
-      : undefined;
-    const knots = urls.shulcrum
-      ? await fetchScriptTip("knots", urls.shulcrum, s.electrumScripthash)
-      : undefined;
-    if (core) {
-      coreOk = core.ok;
-      if (!core.ok) coreError = core.error ?? "fulcrum error";
-    }
-    if (knots) {
-      knotsOk = knots.ok;
-      if (!knots.ok) knotsError = knots.error ?? "shulcrum error";
-    }
-    if (core?.ok || knots?.ok) tipAnswered = true;
-    else if (!tipAnswered) {
-      // First watched script failed on every configured tip — stop before the gap.
-      if (urls.fulcrum) await recordTipSync(db, "core", false, coreError ?? "unreachable");
-      if (urls.shulcrum) await recordTipSync(db, "knots", false, knotsError ?? "unreachable");
-      return {
-        pending: true as const,
-        health,
-        rows: [],
-        newNotifications: [],
-        suggestedTasks: 0,
-      };
-    }
-    const live = outpointRowsFromTips(s.id, s.address, core, knots, {
-      accountId: s.accountId,
-      watchAccountId: s.accountId,
-    });
-    rows.push(...live);
-    await db
-      .update(watchedScripts)
-      .set({ witnessState: witnessFromTips(core, knots) })
-      .where(eq(watchedScripts.id, s.id));
-    if (core && !core.ok) health.fulcrumError = core.error ?? "fulcrum error";
-    if (knots && !knots.ok) health.shulcrumError = knots.error ?? "shulcrum error";
-
-    if (core?.ok && knots?.ok) {
-      const replay = await applyReplayReceiveSync({
-        db,
-        organizerAccountId: account.id,
-        scriptId: s.id,
-        scripthash: s.electrumScripthash,
-        address: s.address,
-        coreUnspent: core.unspent,
-        knotsUnspent: knots.unspent,
-        liveOutpoints: live,
+  const coreTip = tipTimes(urls.fulcrum);
+  const knotsTip = tipTimes(urls.shulcrum);
+  try {
+    for (const s of scripts) {
+      const core = urls.fulcrum
+        ? await fetchScriptTip("core", urls.fulcrum, s.electrumScripthash)
+        : undefined;
+      const knots = urls.shulcrum
+        ? await fetchScriptTip("knots", urls.shulcrum, s.electrumScripthash)
+        : undefined;
+      if (core) {
+        coreOk = core.ok;
+        if (!core.ok) coreError = core.error ?? "fulcrum error";
+      }
+      if (knots) {
+        knotsOk = knots.ok;
+        if (!knots.ok) knotsError = knots.error ?? "shulcrum error";
+      }
+      if (core?.ok || knots?.ok) tipAnswered = true;
+      else if (!tipAnswered) {
+        // First watched script failed on every configured tip — stop before the gap.
+        if (urls.fulcrum) await recordTipSync(db, "core", false, coreError ?? "unreachable");
+        if (urls.shulcrum) await recordTipSync(db, "knots", false, knotsError ?? "unreachable");
+        return {
+          pending: true as const,
+          health,
+          rows: [],
+          newNotifications: [],
+          suggestedTasks: 0,
+        };
+      }
+      const live = outpointRowsFromTips(s.id, s.address, core, knots, {
+        accountId: s.accountId,
+        watchAccountId: s.accountId,
       });
-      newNotifications.push(...replay.newNotifications);
-    } else {
-      if (core?.ok) await replaceTipUnspent(db, s.id, "core", core.unspent);
-      if (knots?.ok) await replaceTipUnspent(db, s.id, "knots", knots.unspent);
+      rows.push(...live);
+      const witnessState = witnessFromTips(core, knots);
+      const exposure = witnessState === "published" ? witnessExposureFromTips(core, knots) : null;
+      let exposedAt: Date | null = null;
+      if (exposure?.height != null && exposure.height > 0) {
+        const times = exposure.tip === "core" ? coreTip?.times : knotsTip?.times;
+        exposedAt = times ? await times.timeForHeight(exposure.height) : null;
+      }
+      await db
+        .update(watchedScripts)
+        .set({
+          witnessState,
+          witnessExposedTxid: exposure?.txid ?? null,
+          witnessExposedTip: exposure?.tip ?? null,
+          witnessExposedHeight: exposure?.height ?? null,
+          witnessExposedAt: exposedAt,
+        })
+        .where(eq(watchedScripts.id, s.id));
+      if (core && !core.ok) health.fulcrumError = core.error ?? "fulcrum error";
+      if (knots && !knots.ok) health.shulcrumError = knots.error ?? "shulcrum error";
+
+      if (core?.ok && knots?.ok) {
+        const replay = await applyReplayReceiveSync({
+          db,
+          organizerAccountId: account.id,
+          scriptId: s.id,
+          scripthash: s.electrumScripthash,
+          address: s.address,
+          coreUnspent: core.unspent,
+          knotsUnspent: knots.unspent,
+          coreHistory: core.history,
+          knotsHistory: knots.history,
+          coreTimes: coreTip?.times,
+          knotsTimes: knotsTip?.times,
+          liveOutpoints: live,
+        });
+        newNotifications.push(...replay.newNotifications);
+      } else {
+      if (core?.ok) {
+        await replaceTipUnspent(db, s.id, "core", core.unspent, coreTip?.times, core.history);
+      }
+      if (knots?.ok) {
+        await replaceTipUnspent(db, s.id, "knots", knots.unspent, knotsTip?.times, knots.history);
+      }
+      }
     }
-  }
 
-  const suggestions = suggestTasksFromRows(rows).filter(
-    (s) => s.kind !== "auto_replay_receive"
-  );
-  let suggestedCount = 0;
-  for (const s of suggestions) {
-    const existing = await db
-      .select()
-      .from(organizerTasks)
-      .where(eq(organizerTasks.dedupeKey, s.dedupeKey))
-      .limit(1);
-    if (existing.length) continue;
-    await db.insert(organizerTasks).values({
-      accountId: account.id,
-      scriptId: s.scriptId,
-      kind: s.kind,
-      status: "open",
-      title: s.title,
-      body: s.body,
-      dedupeKey: s.dedupeKey,
-      metadata: s.metadata ?? null,
-    });
-    suggestedCount += 1;
-  }
+    const suggestions = suggestTasksFromRows(rows).filter(
+      (s) => s.kind !== "auto_replay_receive"
+    );
+    let suggestedCount = 0;
+    for (const s of suggestions) {
+      const existing = await db
+        .select()
+        .from(organizerTasks)
+        .where(eq(organizerTasks.dedupeKey, s.dedupeKey))
+        .limit(1);
+      if (existing.length) continue;
+      await db.insert(organizerTasks).values({
+        accountId: account.id,
+        scriptId: s.scriptId,
+        kind: s.kind,
+        status: "open",
+        title: s.title,
+        body: s.body,
+        dedupeKey: s.dedupeKey,
+        metadata: s.metadata ?? null,
+      });
+      suggestedCount += 1;
+    }
 
-  await db
-    .update(organizerAccounts)
-    .set({ lastSyncedAt: new Date(), updatedAt: new Date() })
-    .where(eq(organizerAccounts.id, id));
+    await db
+      .update(organizerAccounts)
+      .set({ lastSyncedAt: new Date(), updatedAt: new Date() })
+      .where(eq(organizerAccounts.id, id));
 
-  if (urls.fulcrum) {
-    await recordTipSync(db, "core", coreOk === true, coreError);
-  }
-  if (urls.shulcrum) {
-    await recordTipSync(db, "knots", knotsOk === true, knotsError);
-  }
+    if (urls.fulcrum) {
+      await recordTipSync(db, "core", coreOk === true, coreError);
+    }
+    if (urls.shulcrum) {
+      await recordTipSync(db, "knots", knotsOk === true, knotsError);
+    }
 
-  const balances = aggregateAccountBalances(
-    [
+    const balances = aggregateAccountBalances(
+      [
+        {
+          id: account.id,
+          source: account.source,
+          watchAccountId: account.watchAccountId,
+          manualCoreSats: account.manualCoreSats,
+          manualKnotsSats: account.manualKnotsSats,
+        },
+      ],
+      rows,
       {
-        id: account.id,
-        source: account.source,
-        watchAccountId: account.watchAccountId,
-        manualCoreSats: account.manualCoreSats,
-        manualKnotsSats: account.manualKnotsSats,
-      },
-    ],
-    rows,
-    {
-      core: coreOk === true,
-      knots: knotsOk === true,
-      coreError,
-      knotsError,
-    }
-  );
+        core: coreOk === true,
+        knots: knotsOk === true,
+        coreError,
+        knotsError,
+      }
+    );
 
-  return {
-    health,
-    rows,
-    balance: balances[0],
-    newNotifications,
-    suggestedTasks: suggestedCount,
-  };
+    const { loadAccountActivity, serializeActivityStamp } = await import(
+      "@/lib/organizer/accountActivity"
+    );
+    const activity = (
+      await loadAccountActivity(db, [
+        { id: account.id, watchAccountId: account.watchAccountId },
+      ])
+    ).get(account.id);
+
+    return {
+      health,
+      rows,
+      balance: balances[0],
+      lastReceived: serializeActivityStamp(activity?.lastReceived ?? { height: null, at: null }),
+      lastSent: serializeActivityStamp(activity?.lastSent ?? { height: null, at: null }),
+      newNotifications,
+      suggestedTasks: suggestedCount,
+    };
+  } finally {
+    coreTip?.client.close();
+    knotsTip?.client.close();
+  }
 }

@@ -15,6 +15,8 @@ describe("tipStateRows", () => {
           outpointVout: 0,
           status: "unspent",
           valueSats: 1000n,
+          confirmedHeight: 800_000,
+          confirmedAt: new Date("2025-01-01T00:00:00Z"),
         },
         {
           scriptId: 1,
@@ -23,6 +25,8 @@ describe("tipStateRows", () => {
           outpointVout: 1,
           status: "unspent",
           valueSats: 500n,
+          confirmedHeight: 800_100,
+          confirmedAt: new Date("2025-02-01T00:00:00Z"),
         },
         {
           scriptId: 1,
@@ -31,6 +35,8 @@ describe("tipStateRows", () => {
           outpointVout: 0,
           status: "unspent",
           valueSats: 1000n,
+          confirmedHeight: 800_000,
+          confirmedAt: new Date("2025-01-01T00:00:00Z"),
         },
       ],
       9,
@@ -42,8 +48,10 @@ describe("tipStateRows", () => {
     assert.equal(both?.presence, "both");
     assert.equal(both?.replayRisk, true);
     assert.equal(both?.vout, 0);
+    assert.equal(both?.receivedAt, "2025-01-01T00:00:00.000Z");
     assert.equal(coreOnly?.presence, "core_only");
     assert.equal(coreOnly?.replayRisk, false);
+    assert.equal(coreOnly?.receivedHeight, 800_100);
     assert.equal(rows[0].witness, "hashed");
     assert.equal(rows[0].watchAccountId, 9);
     const coreSats = rows.reduce((acc, r) => acc + (r.core.valueSats ?? 0), 0);
@@ -65,6 +73,8 @@ describe("tipStateRows", () => {
           outpointVout: 0,
           status: "spent",
           valueSats: null,
+          confirmedHeight: 900_000,
+          confirmedAt: new Date("2025-03-01T00:00:00Z"),
         },
         {
           scriptId: 2,
@@ -73,6 +83,8 @@ describe("tipStateRows", () => {
           outpointVout: 0,
           status: "unspent",
           valueSats: 42n,
+          confirmedHeight: 800_000,
+          confirmedAt: new Date("2024-12-01T00:00:00Z"),
         },
       ],
       3,

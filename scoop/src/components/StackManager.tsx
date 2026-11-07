@@ -56,7 +56,18 @@ export function StackManager() {
     setConfig((current) => {
       if (!current) return current;
       return {
+        ...current,
         services: current.services.map((svc) => (svc.id === id ? { ...svc, [key]: value } : svc)),
+      };
+    });
+  };
+
+  const patchExplorer = (tip: "core" | "knots", value: string) => {
+    setConfig((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        explorers: { ...current.explorers, [tip]: value },
       };
     });
   };
@@ -150,6 +161,33 @@ export function StackManager() {
           busyIds={busyIds}
           onSelect={(id) => setFocusId(id)}
         />
+        <div className="stack-explorers">
+          <h3>Block explorers</h3>
+          <p className="muted">
+            Used for pubkey-exposure and transaction links. Core defaults to mempool.space; Knots
+            defaults to mempool.guide. Env <span className="mono">SCOOP_EXPLORER_CORE</span> /{" "}
+            <span className="mono">SCOOP_EXPLORER_KNOTS</span> override these when set.
+          </p>
+          <label className="field">
+            <span>Core explorer base</span>
+            <input
+              value={config.explorers?.core ?? ""}
+              placeholder="https://mempool.space"
+              onChange={(e) => patchExplorer("core", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Knots explorer base</span>
+            <input
+              value={config.explorers?.knots ?? ""}
+              placeholder="https://mempool.guide"
+              onChange={(e) => patchExplorer("knots", e.target.value)}
+            />
+          </label>
+          <button type="button" className="scoop-btn" onClick={() => void save()} disabled={busy}>
+            Save explorers
+          </button>
+        </div>
       </section>
       {!statusPending ? (
         <StackRecover
@@ -192,6 +230,7 @@ export function StackManager() {
       </details>
       {focused ? (
         <StackServiceEditor
+          key={focused.id}
           svc={focused}
           row={rows.find((item) => item.id === focused.id)}
           statusPending={statusPending}

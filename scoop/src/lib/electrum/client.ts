@@ -147,6 +147,14 @@ export class ElectrumClient {
     return this.call("blockchain.scripthash.get_balance", [scripthash]);
   }
 
+  async getBlockHeader(height: number): Promise<string> {
+    const header = await this.call("blockchain.block.header", [height]);
+    if (typeof header !== "string" || !header.trim()) {
+      throw new Error("electrum block header missing");
+    }
+    return header.trim();
+  }
+
   private onData(chunk: string): void {
     this.buf += chunk;
     let idx: number;

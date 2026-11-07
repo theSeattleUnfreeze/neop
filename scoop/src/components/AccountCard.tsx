@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { formatActivityStamp } from "@/lib/catalog/activity";
+
+type ActivityStampJson = { height: number | null; at: string | null };
 
 type Props = {
   id: number;
@@ -16,6 +19,8 @@ type Props = {
   coreKnown?: boolean;
   knotsKnown?: boolean;
   lastSyncedAt?: string | null;
+  lastReceived?: ActivityStampJson | null;
+  lastSent?: ActivityStampJson | null;
 };
 
 function fmtSats(s: string) {
@@ -46,6 +51,16 @@ export function AccountCard(props: Props) {
         </span>
         <span className={`presence-chip knots${props.knotsKnown === false ? " none" : ""}`}>
           Knots {tipLabel(props.knotsKnown, props.knotsSats, props.estimate)}
+        </span>
+      </div>
+      <div className="account-activity">
+        <span>
+          <span className="muted">Last received</span>{" "}
+          {formatActivityStamp(props.lastReceived)}
+        </span>
+        <span>
+          <span className="muted">Last sent</span>{" "}
+          {formatActivityStamp(props.lastSent)}
         </span>
       </div>
       <div className="account-meta">
