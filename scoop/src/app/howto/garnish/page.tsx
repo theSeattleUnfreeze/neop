@@ -51,10 +51,10 @@ export default function GarnishHowToPage() {
           Core reads that line when it starts. There is no RPC to raise it for the broadcast and
           put it back when the send returns. Restoring the 83-byte limit takes another restart,
           and that restart drops the garnish from the mempool before miners can take it.{" "}
-          <Link href="/stack?service=core-node#datacarrier">
-            Add the line to bitcoin.conf, start Core once, and leave it until the Core transactions are in a block
-          </Link>
-          . Leave Core running while Fulcrum is still downloading blocks.
+          <Link href="/garnish">Garnish</Link> copies <span className="mono">datacarriersize=120</span>, opens
+          bitcoin.conf, and copies a restart command for this machine. It also copies{" "}
+          <span className="mono">datacarriersize=83</span> for after the Core transactions are in a block. Leave Core
+          running while Fulcrum is still downloading blocks.
         </p>
       </section>
 
