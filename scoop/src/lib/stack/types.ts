@@ -40,8 +40,16 @@ export type StackService = {
   startosHost: string;
 };
 
+export type StackExplorers = {
+  /** Base URL for Core-chain tx links (default https://mempool.space). */
+  core: string;
+  /** Base URL for Knots-chain tx links (default https://mempool.guide). */
+  knots: string;
+};
+
 export type StackConfig = {
   services: StackService[];
+  explorers: StackExplorers;
 };
 
 export type StackState = "up" | "down" | "unset";

@@ -64,16 +64,20 @@ export function StackServiceEditor({
   onSave,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
+  // Focus Close once when the dialog opens. Do not depend on onClose — the parent
+  // passes a fresh arrow each render, and re-running would steal focus from inputs.
   useEffect(() => {
     if (mode !== "dialog") return;
     closeRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose?.();
+      if (event.key === "Escape") onCloseRef.current?.();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, onClose]);
+  }, [mode, svc.id]);
 
   const body = (
     <section className={`scoop-panel stack-service-editor${mode === "dialog" ? " is-dialog" : ""}`}>

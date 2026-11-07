@@ -2,13 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
-import { CoinTable } from "@/components/CoinTable";
+import { useSearchParams } from "next/navigation";
+import { ChevronDown, RefreshCw } from "lucide-react";
+import { CoinTable, type ScriptWitness } from "@/components/CoinTable";
 import { SplitChecklist } from "@/components/SplitChecklist";
-import type { CatalogFilter } from "@/lib/catalog/presence";
+import { formatActivityStamp } from "@/lib/catalog/activity";
+import { filterCatalogRows, type CatalogFilter } from "@/lib/catalog/presence";
 import type { OutpointRow } from "@/lib/catalog/outpoints";
+import {
+  DEFAULT_EXPLORER_CORE,
+  DEFAULT_EXPLORER_KNOTS,
+  type ExplorerBases,
+} from "@/lib/explorer/urls";
+import { outpointDomId, parseOutpointQuery } from "@/lib/organizer/walletLinks";
 
 type Props = { id: number };
+
+type ActivityStampJson = { height: number | null; at: string | null };
 
 type Account = {
   id: number;
@@ -37,19 +47,56 @@ type Health = {
 
 type Row = OutpointRow;
 
-type ScriptWitness = { id: number; witnessState?: string | null };
+const SPILL_EXPLAINER =
+  "A spill is the same outpoint spent on both Core and Knots — a dual-effect spend. That usually means the transaction replayed (or was broadcast) on both chains. Spills are not the same as “needs split”: those coins are still unspent on both tips.";
+
+const POLL_MS = 10_000;
 
 export function AccountDetailClient({ id }: Props) {
+  const searchParams = useSearchParams();
+  const highlightOutpoint = parseOutpointQuery(searchParams.get("outpoint"));
   const [account, setAccount] = useState<Account | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [scripts, setScripts] = useState<ScriptWitness[]>([]);
+  const [explorers, setExplorers] = useState<ExplorerBases>({
+    core: DEFAULT_EXPLORER_CORE,
+    knots: DEFAULT_EXPLORER_KNOTS,
+  });
   const [balance, setBalance] = useState<Balance | null>(null);
+  const [lastReceived, setLastReceived] = useState<ActivityStampJson | null>(null);
+  const [lastSent, setLastSent] = useState<ActivityStampJson | null>(null);
   const [health, setHealth] = useState<Health>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [watching, setWatching] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [filter, setFilter] = useState<CatalogFilter>("all");
-  const autoSyncFor = useRef<number | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const syncInFlight = useRef(false);
+  const accountSource = useRef<Account["source"] | null>(null);
+
+  const applyPayload = useCallback((json: {
+    account?: Account;
+    rows?: Row[];
+    scripts?: ScriptWitness[];
+    balance?: Balance | null;
+    lastReceived?: ActivityStampJson | null;
+    lastSent?: ActivityStampJson | null;
+    health?: Health;
+    explorers?: ExplorerBases;
+  }) => {
+    if (json.account) {
+      setAccount(json.account);
+      accountSource.current = json.account.source;
+    }
+    if (json.rows) setRows(json.rows);
+    if (json.scripts) setScripts(json.scripts);
+    if (json.balance !== undefined) setBalance(json.balance ?? null);
+    if (json.lastReceived !== undefined) setLastReceived(json.lastReceived ?? null);
+    if (json.lastSent !== undefined) setLastSent(json.lastSent ?? null);
+    if (json.health) setHealth(json.health);
+    if (json.explorers?.core && json.explorers?.knots) setExplorers(json.explorers);
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -59,56 +106,87 @@ export function AccountDetailClient({ id }: Props) {
       setError(json.error ?? "load failed");
       return null;
     }
-    setAccount(json.account);
-    setRows(json.rows ?? []);
-    setScripts(json.scripts ?? []);
-    setBalance(json.balance ?? null);
+    applyPayload(json);
     return json.account as Account;
-  }, [id]);
+  }, [id, applyPayload]);
 
-  const sync = useCallback(async () => {
-    setBusy(true);
-    setSyncMsg(null);
-    try {
-      const res = await fetch(`/api/organizer/accounts/${id}/sync`, { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "sync failed");
-      setHealth({
-        fulcrumError: json.health?.fulcrumError,
-        shulcrumError: json.health?.shulcrumError,
-      });
-      if (json.rows) setRows(json.rows);
-      if (json.balance) setBalance(json.balance);
-      if (json.pending) {
-        setSyncMsg("Sync did not finish. Balances stay unknown until Electrum answers.");
+  const sync = useCallback(
+    async (opts: { manual?: boolean } = {}) => {
+      if (syncInFlight.current) return;
+      syncInFlight.current = true;
+      if (opts.manual) {
+        setBusy(true);
+        setSyncMsg(null);
       } else {
-        const n = (json.newNotifications ?? []).length;
-        setSyncMsg(n ? `Synced. ${n} replay alert${n === 1 ? "" : "s"}.` : "Synced.");
+        setWatching(true);
       }
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }, [id, load]);
+      try {
+        const res = await fetch(`/api/organizer/accounts/${id}/sync`, { method: "POST" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "sync failed");
+        setHealth({
+          fulcrumError: json.health?.fulcrumError,
+          shulcrumError: json.health?.shulcrumError,
+        });
+        if (json.rows) setRows(json.rows);
+        if (json.balance) setBalance(json.balance);
+        if (json.lastReceived) setLastReceived(json.lastReceived);
+        if (json.lastSent) setLastSent(json.lastSent);
+        if (opts.manual) {
+          if (json.pending) {
+            setSyncMsg("Sync did not finish. Balances stay unknown until Electrum answers.");
+          } else {
+            const n = (json.newNotifications ?? []).length;
+            setSyncMsg(n ? `Synced. ${n} replay alert${n === 1 ? "" : "s"}.` : "Synced.");
+          }
+        }
+        // Reload from tip state so receive/sent stamps and spent markers match the DB.
+        await load();
+      } catch (e) {
+        if (opts.manual) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        syncInFlight.current = false;
+        if (opts.manual) setBusy(false);
+        else setWatching(false);
+      }
+    },
+    [id, load]
+  );
 
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
     void (async () => {
       const acc = await load();
-      if (cancelled || !acc) return;
-      if (acc.source !== "electrum") return;
-      if (autoSyncFor.current === id) return;
-      autoSyncFor.current = id;
-      await sync();
+      if (cancelled || !acc || acc.source !== "electrum") return;
+      // Background sync after paint; do not block the first render on Electrum.
+      void sync({ manual: false });
+      timer = setInterval(() => {
+        if (cancelled) return;
+        if (accountSource.current !== "electrum") return;
+        void sync({ manual: false });
+      }, POLL_MS);
     })();
+
     return () => {
       cancelled = true;
+      if (timer) clearInterval(timer);
     };
-    // Sync once per wallet visit so older imports (tip state never saved) get balances.
+    // Fresh watch loop when navigating between wallets.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    if (!highlightOutpoint || !rows.length) return;
+    const el = document.getElementById(
+      outpointDomId(highlightOutpoint.txid, highlightOutpoint.vout)
+    );
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightOutpoint, rows]);
 
   const save = async () => {
     if (!account) return;
@@ -128,6 +206,7 @@ export function AccountDetailClient({ id }: Props) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "save failed");
       setAccount(json.account);
+      setEditOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -137,6 +216,14 @@ export function AccountDetailClient({ id }: Props) {
 
   if (!account && !error) return <p className="muted">Loading…</p>;
   if (!account) return <p className="banner bad">{error}</p>;
+
+  const filterCounts: Record<CatalogFilter, number> = {
+    all: rows.length,
+    replay: filterCatalogRows(rows, "replay").length,
+    core: filterCatalogRows(rows, "core").length,
+    knots: filterCatalogRows(rows, "knots").length,
+    spills: filterCatalogRows(rows, "spills").length,
+  };
 
   const FILTERS: { id: CatalogFilter; label: string }[] = [
     { id: "all", label: "All" },
@@ -152,7 +239,22 @@ export function AccountDetailClient({ id }: Props) {
         <p className="muted">
           <Link href="/wallets">← Wallets</Link>
         </p>
-        <h2>{account.label}</h2>
+        <div className="section-head">
+          <h2>{account.label}</h2>
+          <div className="dash-actions">
+            {account.source === "electrum" ? (
+              <button
+                type="button"
+                className="scoop-btn ghost"
+                onClick={() => void sync({ manual: true })}
+                disabled={busy}
+              >
+                <RefreshCw size={16} className={watching && !busy ? "spin-slow" : undefined} />{" "}
+                {busy ? "Syncing…" : watching ? "Watching…" : "Sync now"}
+              </button>
+            ) : null}
+          </div>
+        </div>
         {error ? <p className="banner bad">{error}</p> : null}
         {syncMsg ? <p className="banner warn">{syncMsg}</p> : null}
         {health.fulcrumError ? (
@@ -196,85 +298,124 @@ export function AccountDetailClient({ id }: Props) {
                   : "unknown"}
               </strong>
             </div>
+            <div>
+              <span className="muted">Last received</span>
+              <strong>{formatActivityStamp(lastReceived)}</strong>
+            </div>
+            <div>
+              <span className="muted">Last sent</span>
+              <strong>{formatActivityStamp(lastSent)}</strong>
+            </div>
           </div>
         ) : null}
-        <label className="field">
-          <span>Name</span>
-          <input
-            value={account.label}
-            onChange={(e) => setAccount({ ...account, label: e.target.value })}
-          />
-        </label>
-        <label className="field">
-          <span>Notes</span>
-          <input
-            value={account.notes}
-            onChange={(e) => setAccount({ ...account, notes: e.target.value })}
-          />
-        </label>
-        <label className="field">
-          <span>Reminder</span>
-          <input
-            value={account.reminder}
-            onChange={(e) => setAccount({ ...account, reminder: e.target.value })}
-          />
-        </label>
-        {account.source === "manual" ? (
-          <>
-            <label className="field">
-              <span>Estimated Core sats</span>
-              <input
-                value={account.manualCoreSats ?? ""}
-                onChange={(e) => setAccount({ ...account, manualCoreSats: e.target.value })}
-              />
-            </label>
-            <label className="field">
-              <span>Estimated Knots sats</span>
-              <input
-                value={account.manualKnotsSats ?? ""}
-                onChange={(e) => setAccount({ ...account, manualKnotsSats: e.target.value })}
-              />
-            </label>
-          </>
-        ) : null}
-        <div className="dash-actions">
-          <button type="button" className="scoop-btn" onClick={save} disabled={busy}>
-            Save
+
+        <div className="edit-fold">
+          <button
+            type="button"
+            className="edit-fold-toggle"
+            aria-expanded={editOpen}
+            onClick={() => setEditOpen((v) => !v)}
+          >
+            <ChevronDown size={16} className={editOpen ? "is-open" : undefined} />
+            {editOpen ? "Hide wallet settings" : "Edit wallet"}
           </button>
-          {account.source === "electrum" ? (
-            <button type="button" className="scoop-btn ghost" onClick={() => void sync()} disabled={busy}>
-              <RefreshCw size={16} /> {busy ? "Syncing…" : "Sync Electrum"}
-            </button>
+          {editOpen ? (
+            <div className="edit-fold-body">
+              <label className="field">
+                <span>Name</span>
+                <input
+                  value={account.label}
+                  onChange={(e) => setAccount({ ...account, label: e.target.value })}
+                />
+              </label>
+              <label className="field">
+                <span>Notes</span>
+                <input
+                  value={account.notes}
+                  onChange={(e) => setAccount({ ...account, notes: e.target.value })}
+                />
+              </label>
+              <label className="field">
+                <span>Reminder</span>
+                <input
+                  value={account.reminder}
+                  onChange={(e) => setAccount({ ...account, reminder: e.target.value })}
+                />
+              </label>
+              {account.source === "manual" ? (
+                <>
+                  <label className="field">
+                    <span>Estimated Core sats</span>
+                    <input
+                      value={account.manualCoreSats ?? ""}
+                      onChange={(e) =>
+                        setAccount({ ...account, manualCoreSats: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Estimated Knots sats</span>
+                    <input
+                      value={account.manualKnotsSats ?? ""}
+                      onChange={(e) =>
+                        setAccount({ ...account, manualKnotsSats: e.target.value })
+                      }
+                    />
+                  </label>
+                </>
+              ) : null}
+              <div className="dash-actions">
+                <button type="button" className="scoop-btn" onClick={save} disabled={busy}>
+                  Save
+                </button>
+              </div>
+            </div>
           ) : null}
         </div>
       </section>
 
       {account.source === "electrum" ? (
         <>
-        <SplitChecklist rows={rows} scripts={scripts} />
-        <section className="scoop-panel">
-          <div className="section-head">
-            <h3>Outpoints</h3>
-          </div>
-          <div className="filter-row" role="tablist" aria-label="Tip filter">
-            {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className={`scoop-btn ghost${filter === f.id ? " is-active-filter" : ""}`}
-                onClick={() => setFilter(f.id)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-          <CoinTable rows={rows} filter={filter} />
-          <p className="muted">
-            Needs split shows outpoints unspent on both chains. Mixed on the address above them is
-            not replay risk. Core uses Fulcrum; Knots uses your Blake2b Electrum. Shrike only sees
-            Knots.
-          </p>
-        </section>
+          <SplitChecklist
+            rows={rows}
+            scripts={scripts}
+            explorers={explorers}
+            onExplorersChange={setExplorers}
+          />
+          <section className="scoop-panel">
+            <div className="section-head">
+              <h3>Outpoints</h3>
+            </div>
+            <div className="filter-row" role="tablist" aria-label="Tip filter">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`scoop-btn ghost${filter === f.id ? " is-active-filter" : ""}`}
+                  onClick={() => setFilter(f.id)}
+                >
+                  {f.label} ({filterCounts[f.id]})
+                </button>
+              ))}
+            </div>
+            {filter === "spills" ? (
+              <p className="muted spill-explainer">{SPILL_EXPLAINER}</p>
+            ) : null}
+            <CoinTable
+              rows={rows}
+              filter={filter}
+              scripts={scripts}
+              explorers={explorers}
+              onExplorersChange={setExplorers}
+              highlightOutpoint={highlightOutpoint}
+              emptyHint={filter === "spills" ? "No spills in this wallet." : undefined}
+            />
+            <p className="muted">
+              Needs split shows outpoints unspent on both chains. Mixed on the address above them is
+              not replay risk. Core uses Fulcrum; Knots uses your Blake2b Electrum. Shrike only sees
+              Knots.
+            </p>
+          </section>
         </>
       ) : null}
     </div>

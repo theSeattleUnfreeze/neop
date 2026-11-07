@@ -5,6 +5,9 @@ import Link from "next/link";
 import { Bell, RefreshCw } from "lucide-react";
 import { AccountCard } from "@/components/AccountCard";
 import { StackStatus } from "@/components/StackStatus";
+import { walletOutpointHref } from "@/lib/organizer/walletLinks";
+
+type ActivityStampJson = { height: number | null; at: string | null };
 
 type Card = {
   account: {
@@ -24,6 +27,8 @@ type Card = {
   };
   openTaskCount: number;
   unreadNotificationCount: number;
+  lastReceived?: ActivityStampJson | null;
+  lastSent?: ActivityStampJson | null;
 };
 
 type Notif = {
@@ -31,6 +36,9 @@ type Notif = {
   title: string;
   body: string;
   detectedAt: string;
+  accountId?: number | null;
+  outpointTxid?: string | null;
+  outpointVout?: number | null;
 };
 
 type Dash = {
@@ -53,8 +61,32 @@ type Dash = {
   openTaskCount: number;
 };
 
+type SidebarTask = {
+  id: number;
+  title: string;
+  kind: string;
+  accountId?: number | null;
+  metadata?: { txid?: string; vout?: number | string } | null;
+};
+
+function metadataVout(value: number | string | undefined): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+  if (typeof value === "string" && /^(0|[1-9]\d*)$/.test(value)) return Number(value);
+  return null;
+}
+
+function taskOutpointHref(task: SidebarTask): string | null {
+  if (!task.accountId) return null;
+  const txid = task.metadata?.txid;
+  const vout = metadataVout(task.metadata?.vout);
+  if (typeof txid === "string" && vout != null) {
+    return walletOutpointHref(task.accountId, txid, vout);
+  }
+  return `/wallets/${task.accountId}`;
+}
+
 function TaskSidebar() {
-  const [tasks, setTasks] = useState<{ id: number; title: string; kind: string }[]>([]);
+  const [tasks, setTasks] = useState<SidebarTask[]>([]);
   useEffect(() => {
     void fetch("/api/organizer/tasks?status=open")
       .then((r) => r.json())
@@ -64,11 +96,21 @@ function TaskSidebar() {
   if (!tasks.length) return <p className="muted">No open tasks.</p>;
   return (
     <ul className="task-list">
-      {tasks.map((t) => (
-        <li key={t.id} className="task-item">
-          <span className={`kind-pill ${t.kind}`}>{t.kind.replace(/_/g, " ")}</span> {t.title}
-        </li>
-      ))}
+      {tasks.map((t) => {
+        const href = taskOutpointHref(t);
+        return (
+          <li key={t.id} className="task-item">
+            <span className={`kind-pill ${t.kind}`}>{t.kind.replace(/_/g, " ")}</span>{" "}
+            {href ? (
+              <Link href={href} className="task-wallet-link">
+                {t.title}
+              </Link>
+            ) : (
+              t.title
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -168,15 +210,40 @@ export function DashboardClient() {
               <p className="muted">No unread replay alerts.</p>
             ) : (
               <ul>
-                {notifs.map((n) => (
-                  <li key={n.id}>
-                    <strong>{n.title}</strong>
-                    <p className="muted">{n.body}</p>
-                    <button type="button" className="scoop-btn ghost" onClick={() => markRead(n.id)}>
-                      Mark read
-                    </button>
-                  </li>
-                ))}
+                {notifs.map((n) => {
+                  const href =
+                    n.accountId && n.outpointTxid != null && n.outpointVout != null
+                      ? walletOutpointHref(n.accountId, n.outpointTxid, n.outpointVout)
+                      : n.accountId
+                        ? `/wallets/${n.accountId}`
+                        : null;
+                  return (
+                    <li key={n.id}>
+                      {href ? (
+                        <Link href={href} className="notif-wallet-link">
+                          <strong>{n.title}</strong>
+                        </Link>
+                      ) : (
+                        <strong>{n.title}</strong>
+                      )}
+                      <p className="muted">{n.body}</p>
+                      <div className="dash-actions">
+                        {href ? (
+                          <Link href={href} className="scoop-btn ghost">
+                            View outpoint
+                          </Link>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="scoop-btn ghost"
+                          onClick={() => markRead(n.id)}
+                        >
+                          Mark read
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -276,6 +343,8 @@ export function DashboardClient() {
                 coreKnown={c.balance.coreKnown}
                 knotsKnown={c.balance.knotsKnown}
                 lastSyncedAt={c.account.lastSyncedAt}
+                lastReceived={c.lastReceived}
+                lastSent={c.lastSent}
               />
             ))}
           </div>

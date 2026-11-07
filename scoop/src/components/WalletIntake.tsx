@@ -82,6 +82,16 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     { label: string; xpub: string; derivationPath: string }[]
   >([]);
   const [sparrowFileName, setSparrowFileName] = useState("");
+  const [multisig, setMultisig] = useState<{
+    m: number;
+    n: number;
+    cosigners: {
+      label: string;
+      xpub: string;
+      derivationPath: string;
+      masterFingerprint: string;
+    }[];
+  } | null>(null);
   const sparrowFile = useRef("");
 
   const mark = (key: string) => setTouched((t) => ({ ...t, [key]: true }));
@@ -120,6 +130,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     setSparrowNote("");
     setSparrowChoices([]);
     setSparrowFileName("");
+    setMultisig(null);
     sparrowFile.current = "";
   }, []);
 
@@ -139,7 +150,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
 
   const kindOk = kind !== null;
   const labelErr = labelError(label);
-  const xpubErr = xpubError(xpub);
+  const xpubErr = multisig ? null : xpubError(xpub);
   const pathErr = derivationPathError(derivationPath);
   const gapErr = gapLimitError(gapLimit);
   const addrErr = addressError(address);
@@ -150,7 +161,7 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
   const canProceed = (() => {
     if (step === "kind") return kindOk;
     if (step === "label") return !labelErr;
-    if (step === "xpub") return !xpubErr && !pathErr && !gapErr;
+    if (step === "xpub") return (Boolean(multisig) || !xpubErr) && !pathErr && !gapErr;
     if (step === "address") return !addrErr && !shErr;
     if (step === "manual") return !labelErr && !coreErr && !knotsErr;
     if (step === "review") return !busy;
@@ -185,11 +196,23 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
       if (manualCore.trim()) body.manualCoreSats = manualCore.trim();
       if (manualKnots.trim()) body.manualKnotsSats = manualKnots.trim();
     } else if (kind === "wallet") {
-      body.xpub = xpub.trim();
-      if (derivationPath.trim()) body.derivationPath = derivationPath.trim();
+      if (multisig) {
+        body.multisig = {
+          m: multisig.m,
+          cosigners: multisig.cosigners.map((c) => ({
+            extendedKey: c.xpub,
+            derivation: c.derivationPath || undefined,
+            label: c.label || undefined,
+            masterFingerprint: c.masterFingerprint || undefined,
+          })),
+        };
+      } else {
+        body.xpub = xpub.trim();
+        if (derivationPath.trim()) body.derivationPath = derivationPath.trim();
+        body.discover = discover;
+      }
       body.gapLimit = parseGapLimit(gapLimit);
       body.includeChange = includeChange;
-      body.discover = discover;
     } else {
       body.scripts = [
         {
@@ -270,14 +293,71 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
         label: string;
         xpub: string;
         derivationPath: string;
+        masterFingerprint?: string;
       }[];
       setSparrowNote(typeof json.note === "string" ? json.note : "");
-      setSparrowChoices(accounts);
-      const first = accounts[0];
-      if (first) {
-        setXpub(first.xpub);
-        if (first.derivationPath) setDerivationPath(first.derivationPath);
-        setLabel((current) => current.trim() || (typeof json.name === "string" ? json.name : "") || current);
+      const multiFromApi = json.multisig as
+        | {
+            m: number;
+            n: number;
+            cosigners: {
+              label: string;
+              xpub: string;
+              derivationPath: string;
+              masterFingerprint: string;
+            }[];
+          }
+        | undefined;
+      // Prefer the server multisig object. If an older bundle only sent cosigner
+      // accounts for a MULTI Electrum file, rebuild the quorum from those keys.
+      const namePolicy =
+        typeof json.name === "string" ? /^(\d+)-of-(\d+)/i.exec(json.name) : null;
+      const multi =
+        multiFromApi && Array.isArray(multiFromApi.cosigners) && multiFromApi.cosigners.length >= 2
+          ? multiFromApi
+          : json.policyType === "MULTI" &&
+              accounts.length >= 2 &&
+              accounts.every((a) => /^(Zpub|Ypub|Vpub|Upub)/.test(a.xpub))
+            ? {
+                m: namePolicy ? Number(namePolicy[1]) : multiFromApi?.m ?? 0,
+                n: namePolicy ? Number(namePolicy[2]) : accounts.length,
+                cosigners: accounts.map((a) => ({
+                  label: a.label,
+                  xpub: a.xpub,
+                  derivationPath: a.derivationPath,
+                  masterFingerprint: a.masterFingerprint ?? "",
+                })),
+              }
+            : null;
+      if (multi && (!Number.isInteger(multi.m) || multi.m < 1 || multi.m > multi.n)) {
+        setError("Could not read the multisig threshold from that file.");
+        setBusy(false);
+        return;
+      }
+      if (multi) {
+        setMultisig({
+          m: multi.m,
+          n: multi.n,
+          cosigners: multi.cosigners,
+        });
+        setXpub("");
+        setDerivationPath(multi.cosigners[0]?.derivationPath || "");
+        setSparrowChoices([]);
+        setDiscover(false);
+        setLabel(
+          (current) => current.trim() || (typeof json.name === "string" ? json.name : "") || current
+        );
+      } else {
+        setMultisig(null);
+        setSparrowChoices(accounts);
+        const first = accounts[0];
+        if (first) {
+          setXpub(first.xpub);
+          if (first.derivationPath) setDerivationPath(first.derivationPath);
+          setLabel(
+            (current) => current.trim() || (typeof json.name === "string" ? json.name : "") || current
+          );
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -468,9 +548,16 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
               {sparrowFileName ? `Open ${sparrowFileName}` : "Open file"}
             </button>
             {sparrowNote ? <p className="banner warn">{sparrowNote}</p> : null}
-            {sparrowChoices.length > 1 ? (
+            {multisig ? (
+              <p className="banner">
+                Loaded a {multisig.m}-of-{multisig.n} multisig ({multisig.n} cosigners
+                {derivationPath ? ` at ${derivationPath}` : ""}). Scoop will watch outpoints owned
+                by that quorum — not each cosigner as a separate wallet. Continue with Next.
+              </p>
+            ) : null}
+            {sparrowChoices.length > 1 && !multisig ? (
               <label className="field">
-                <span>Which key to watch</span>
+                <span>Which singlesig account to watch</span>
                 <select
                   value={xpub}
                   onChange={(e) => {
@@ -482,37 +569,47 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
                 >
                   {sparrowChoices.map((account) => (
                     <option key={account.xpub} value={account.xpub}>
-                      {account.label || account.derivationPath || account.xpub.slice(0, 12)}
+                      {account.label || account.derivationPath || "account"}
                     </option>
                   ))}
                 </select>
+                <span className="muted">
+                  This picker is only for files with several separate singlesig accounts. A 2-of-3
+                  Electrum export should load as one quorum wallet instead — re-open the file if you
+                  still see this.
+                </span>
               </label>
             ) : null}
-            <label className="field">
-              <span>Extended public key</span>
-              <input
-                value={xpub}
-                placeholder="Sparrow → Settings → Copy Extended Public Key"
-                spellCheck={false}
-                {...bind("xpub", setXpub)}
-              />
-              <FieldError message={touched.xpub ? xpubErr : null} />
-            </label>
-            <label className="field">
-              <span>
-                Derivation path <Optional />
-              </span>
-              <input
-                value={derivationPath}
-                placeholder="default from key type — e.g. m/84'/0'/0'"
-                spellCheck={false}
-                {...bind("path", setDerivationPath)}
-              />
-              <FieldError message={touched.path ? pathErr : null} />
-            </label>
-            <p className="muted">
-              zpub → native segwit, ypub → nested, xpub → auto-detect unless you set a path.
-            </p>
+            {!multisig ? (
+              <>
+                <label className="field">
+                  <span>Extended public key</span>
+                  <input
+                    value={xpub}
+                    placeholder="Sparrow → Settings → Copy Extended Public Key"
+                    spellCheck={false}
+                    {...bind("xpub", setXpub)}
+                  />
+                  <FieldError message={touched.xpub ? xpubErr : null} />
+                </label>
+                <label className="field">
+                  <span>
+                    Derivation path <Optional />
+                  </span>
+                  <input
+                    value={derivationPath}
+                    placeholder="default from key type — e.g. m/84'/0'/0'"
+                    spellCheck={false}
+                    {...bind("path", setDerivationPath)}
+                  />
+                  <FieldError message={touched.path ? pathErr : null} />
+                </label>
+                <p className="muted">
+                  zpub → native segwit, ypub → nested, xpub → auto-detect unless you set a path.
+                  Electrum multisig exports (Zpub / 2of3) load as the full policy above.
+                </p>
+              </>
+            ) : null}
             <button
               type="button"
               className="scoop-btn ghost"
@@ -656,6 +753,14 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
                   Check again
                 </button>
               </div>
+            ) : null}
+            {multisig ? (
+              <p className="muted">
+                Policy:{" "}
+                <strong>
+                  {multisig.m}-of-{multisig.n} multisig
+                </strong>
+              </p>
             ) : null}
             <p className="muted">
               Name: <strong>{label}</strong>

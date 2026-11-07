@@ -1,11 +1,12 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { inflateSync, deflateSync } from "node:zlib";
 import * as ecc from "tiny-secp256k1";
+import { isMultisigExtendedKey, parseElectrumWalletType } from "@/lib/electrum/multisig";
 
 const HEADER_LEN = 28;
 const MAGIC = "SPRW1";
 const ECIES_MAGIC = Buffer.from("BIE1");
-const XPUB_RE = /^(xpub|ypub|zpub|tpub|upub|vpub)[1-9A-HJ-NP-Za-km-z]{50,}$/;
+const XPUB_RE = /^(xpub|ypub|zpub|Zpub|Ypub|tpub|upub|vpub|Vpub|Upub)[1-9A-HJ-NP-Za-km-z]{50,}$/;
 
 const SCRIPT_PATH: Record<string, string> = {
   P2WPKH: "m/84'/0'/0'",
@@ -21,12 +22,25 @@ export type SparrowAccount = {
   masterFingerprint: string;
 };
 
+export type MultisigCosignerView = {
+  label: string;
+  xpub: string;
+  derivationPath: string;
+  masterFingerprint: string;
+};
+
 export type SparrowWalletView = {
   name: string;
   policyType: string;
   scriptType: string;
   accounts: SparrowAccount[];
   note: string;
+  /** Present when the file is a full N-of-M Electrum export (all cosigner xpubs). */
+  multisig?: {
+    m: number;
+    n: number;
+    cosigners: MultisigCosignerView[];
+  };
 };
 
 type DeriveKey = (password: string, salt: Buffer) => Promise<Buffer>;
@@ -199,13 +213,79 @@ function walk(node: unknown, accounts: SparrowAccount[]) {
   }
 }
 
-function isElectrumWallet(rec: Record<string, unknown>): boolean {
+function isElectrumSinglesig(rec: Record<string, unknown>): boolean {
   return typeof rec.wallet_type === "string" && rec.keystore != null && typeof rec.keystore === "object";
+}
+
+function electrumMultisigFromJson(rec: Record<string, unknown>): {
+  m: number;
+  n: number;
+  cosigners: MultisigCosignerView[];
+  scriptType: string;
+} | null {
+  if (typeof rec.wallet_type !== "string") return null;
+  const parsedType = parseElectrumWalletType(rec.wallet_type);
+  if (!parsedType) return null;
+
+  const keyed: { index: number; cosigner: MultisigCosignerView }[] = [];
+  for (const [key, value] of Object.entries(rec)) {
+    const slot = /^x(\d+)\/$/.exec(key);
+    if (!slot || !value || typeof value !== "object") continue;
+    const ks = value as Record<string, unknown>;
+    const xpub = typeof ks.xpub === "string" ? ks.xpub.trim() : "";
+    if (!xpub || !isMultisigExtendedKey(xpub)) continue;
+    keyed.push({
+      index: Number(slot[1]),
+      cosigner: {
+        label: typeof ks.label === "string" ? ks.label : `Cosigner ${slot[1]}`,
+        xpub,
+        derivationPath: typeof ks.derivation === "string" ? ks.derivation : "",
+        masterFingerprint: typeof ks.root_fingerprint === "string" ? ks.root_fingerprint : "",
+      },
+    });
+  }
+  keyed.sort((a, b) => a.index - b.index);
+  const cosigners = keyed.map((k) => k.cosigner);
+  if (cosigners.length === 0) {
+    throw new Error(
+      `Electrum ${rec.wallet_type} export has no full cosigner keys. If this is a redacted example, import the real wallet JSON with complete Zpub/Ypub values.`
+    );
+  }
+  if (cosigners.length !== parsedType.n) {
+    throw new Error(
+      `Electrum ${rec.wallet_type} wallet needs ${parsedType.n} cosigner xpubs; found ${cosigners.length}.`
+    );
+  }
+  const prefix = cosigners[0].xpub.slice(0, 4);
+  const scriptType =
+    prefix === "Zpub" || prefix === "Vpub"
+      ? "P2WSH"
+      : prefix === "Ypub" || prefix === "Upub"
+        ? "P2SH_P2WSH"
+        : "";
+  return { m: parsedType.m, n: parsedType.n, cosigners, scriptType };
 }
 
 export function viewFromWalletJson(parsed: unknown): SparrowWalletView {
   if (!parsed || typeof parsed !== "object") throw new Error("Sparrow wallet JSON was empty.");
   const rec = parsed as Record<string, unknown>;
+
+  const electrumMulti = electrumMultisigFromJson(rec);
+  if (electrumMulti) {
+    return {
+      name: `${electrumMulti.m}-of-${electrumMulti.n} multisig`,
+      policyType: "MULTI",
+      scriptType: electrumMulti.scriptType,
+      accounts: electrumMulti.cosigners,
+      multisig: {
+        m: electrumMulti.m,
+        n: electrumMulti.n,
+        cosigners: electrumMulti.cosigners,
+      },
+      note: `Electrum ${electrumMulti.m}-of-${electrumMulti.n} export. Scoop watches the multisig receive scripts, not a single cosigner.`,
+    };
+  }
+
   const accounts: SparrowAccount[] = [];
   walk(parsed, accounts);
   const scriptType = typeof rec.scriptType === "string" ? rec.scriptType : "";
@@ -217,7 +297,7 @@ export function viewFromWalletJson(parsed: unknown): SparrowWalletView {
     throw new Error("No extended public key in that file. Paste the account xpub from Sparrow instead.");
   }
   const policyType = typeof rec.policyType === "string" ? rec.policyType : "";
-  const electrum = isElectrumWallet(rec);
+  const electrum = isElectrumSinglesig(rec);
   const keystore =
     electrum && rec.keystore && typeof rec.keystore === "object"
       ? (rec.keystore as Record<string, unknown>)
@@ -230,7 +310,7 @@ export function viewFromWalletJson(parsed: unknown): SparrowWalletView {
         : "";
   const note =
     policyType === "MULTI"
-      ? "This is a multisig wallet. Scoop can watch one cosigner xpub, which is not the multisig script. Paste an output descriptor if you have one."
+      ? "This is a multisig wallet, but the file only exposes cosigner xpubs Scoop cannot combine into the script. Export the Electrum multisig wallet (all cosigners) or paste an output descriptor."
       : electrum
         ? "Electrum wallet export. Scoop keeps the account xpub and derivation path only."
         : "";

@@ -101,6 +101,16 @@ type CreateBody = {
   watchKey?: string;
   /** Wallet-level xpub/ypub/zpub from Sparrow — expands to addresses */
   xpub?: string;
+  /** Electrum/Coldcard N-of-M account keys (Zpub/Ypub). Builds the multisig scripts. */
+  multisig?: {
+    m: number;
+    cosigners: {
+      extendedKey: string;
+      derivation?: string;
+      label?: string;
+      masterFingerprint?: string;
+    }[];
+  };
   /** Override derivation path (e.g. m/84'/0'/0') to force address type */
   derivationPath?: string;
   /** Receive addresses to watch (default 50) */
@@ -131,7 +141,89 @@ export async function POST(req: Request) {
   let watchAccountId = body.watchAccountId ?? null;
   let discoveryMeta: unknown = null;
 
-  if (source === "electrum" && !watchAccountId && body.xpub?.trim()) {
+  if (source === "electrum" && !watchAccountId && body.multisig) {
+    const { expandMultisigAccount } = await import("@/lib/electrum/multisig");
+    const { envElectrumUrls } = await import("@/lib/sync/fetchTip");
+    let expanded;
+    try {
+      expanded = expandMultisigAccount({
+        m: body.multisig.m,
+        cosigners: body.multisig.cosigners,
+        gapLimit,
+        includeChange: body.includeChange === true,
+      });
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "invalid multisig wallet" },
+        { status: 400 }
+      );
+    }
+    discoveryMeta = {
+      multisig: true,
+      m: expanded.m,
+      n: expanded.n,
+      scriptKind: expanded.scriptKind,
+      accountPath: expanded.accountPath,
+    };
+
+    if (body.preview) {
+      const { probeWatchUsage } = await import("@/lib/electrum/discoverXpub");
+      const urls = envElectrumUrls();
+      const usage = await probeWatchUsage(
+        expanded.scripts,
+        [urls.fulcrum, urls.shulcrum].filter(Boolean) as string[]
+      );
+      return NextResponse.json({
+        preview: true,
+        gapLimit,
+        scriptKind: expanded.scriptKind,
+        accountPath: expanded.accountPath,
+        addressCount: expanded.scripts.length,
+        sampleAddress: expanded.scripts[0]?.address ?? null,
+        used: usage.used,
+        reachable: usage.reachable,
+        emptyWatch: usage.reachable && !usage.used,
+        multisig: { m: expanded.m, n: expanded.n },
+      });
+    }
+
+    const conflict = await existingWatchConflict(
+      db,
+      expanded.scripts.map((s) => s.scripthash)
+    );
+    if (conflict) return conflict;
+
+    try {
+      const [watch] = await db
+        .insert(watchedAccounts)
+        .values({
+          label,
+          watchKey: expanded.watchKey,
+          kind: "multisig",
+          derivationHint: expanded.accountPath,
+          gapLimit,
+        })
+        .returning();
+      await db.insert(watchedScripts).values(
+        expanded.scripts.map((s) => ({
+          accountId: watch.id,
+          address: s.address,
+          electrumScripthash: s.scripthash,
+          scriptPubKeyHex: s.scriptPubKeyHex,
+          path: s.path,
+        }))
+      );
+      watchAccountId = watch.id;
+    } catch (e) {
+      const conflicted = await conflictFromUnique(
+        e,
+        db,
+        expanded.scripts.map((s) => s.scripthash)
+      );
+      if (conflicted) return conflicted;
+      throw e;
+    }
+  } else if (source === "electrum" && !watchAccountId && body.xpub?.trim()) {
     const { expandAccountXpub } = await import("@/lib/electrum/xpub");
     const { discoverXpubScriptKind } = await import("@/lib/electrum/discoverXpub");
     const { envElectrumUrls } = await import("@/lib/sync/fetchTip");

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { walletOutpointHref } from "@/lib/organizer/walletLinks";
 
 type Task = {
   id: number;
@@ -10,9 +11,26 @@ type Task = {
   kind: string;
   status: string;
   accountId?: number | null;
+  metadata?: { txid?: string; vout?: number | string } | null;
   dueAt?: string | null;
   createdAt: string;
 };
+
+function metadataVout(value: number | string | undefined): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+  if (typeof value === "string" && /^(0|[1-9]\d*)$/.test(value)) return Number(value);
+  return null;
+}
+
+function taskHref(task: Task): string | null {
+  if (!task.accountId) return null;
+  const txid = task.metadata?.txid;
+  const vout = metadataVout(task.metadata?.vout);
+  if (typeof txid === "string" && vout != null) {
+    return walletOutpointHref(task.accountId, txid, vout);
+  }
+  return `/wallets/${task.accountId}`;
+}
 
 export function TasksClient() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -114,13 +132,21 @@ export function TasksClient() {
               <li key={t.id} className="task-item">
                 <div className="task-head">
                   <span className={`kind-pill ${t.kind}`}>{t.kind.replace(/_/g, " ")}</span>
-                  <strong>{t.title}</strong>
+                  {taskHref(t) ? (
+                    <Link href={taskHref(t)!} className="task-wallet-link">
+                      <strong>{t.title}</strong>
+                    </Link>
+                  ) : (
+                    <strong>{t.title}</strong>
+                  )}
                 </div>
                 {t.body ? <p className="muted">{t.body}</p> : null}
                 <div className="dash-actions">
-                  {t.accountId ? (
-                    <Link href={`/wallets/${t.accountId}`} className="muted">
-                      Wallet #{t.accountId}
+                  {taskHref(t) ? (
+                    <Link href={taskHref(t)!} className="scoop-btn ghost">
+                      {metadataVout(t.metadata?.vout) != null && t.metadata?.txid
+                        ? "View outpoint"
+                        : "View wallet"}
                     </Link>
                   ) : null}
                   {t.status === "open" ? (
