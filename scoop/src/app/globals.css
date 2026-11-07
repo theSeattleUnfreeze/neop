@@ -221,6 +221,26 @@ a {
   padding-left: 1.2rem;
 }
 
+.howto-index {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.howto-index a {
+  font-family: var(--scoop-font-display);
+  font-size: 1.15rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.howto-index p,
+.howto-steps li + li {
+  margin-top: 0.35rem;
+}
+
 .split-checklist li + li {
   margin-top: 0.35rem;
 }
@@ -231,6 +251,35 @@ a {
   margin: 0.75rem 0 0;
   display: grid;
   gap: 1rem;
+}
+
+.garnish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.garnish-count {
+  margin: 0;
+}
+
+.garnish-download {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.garnish-check {
+  color: #1f8a3b;
+  flex: none;
+}
+
+.garnish-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
 .legend {
@@ -1247,6 +1296,32 @@ a {
 .fork-output-head {
   display: flex;
   justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.split-steps {
+  display: flex;
+  gap: 1rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.split-steps .current a {
+  font-weight: 700;
+}
+
+.broadcast-rows {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.broadcast-rows label {
+  display: flex;
   gap: 0.5rem;
   align-items: center;
 }

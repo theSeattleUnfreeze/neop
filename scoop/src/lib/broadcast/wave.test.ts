@@ -7,6 +7,7 @@ import {
   jitterMs,
   knotsAfterCoreProblems,
   knotsProblems,
+  phaseProblems,
   broadcastAbortFooter,
   chainTipReady,
   httpHost,
@@ -68,6 +69,18 @@ describe("broadcast wave", () => {
     const raw = tx(0x01, [payScript()]);
     assert.deepEqual(knotsAfterCoreProblems(raw), []);
     assert.ok(knotsProblems(raw).some((problem) => problem.includes("UNIFIED")));
+  });
+
+  it("checks a file against the chain it was assigned to", () => {
+    const garnish = tx(0x01, [payScript(), wedge()]);
+    const after = tx(0x01, [payScript()]);
+    const unified = tx(0x21, [payScript()]);
+    assert.deepEqual(phaseProblems(garnish, "core", "long-op-return"), []);
+    assert.deepEqual(phaseProblems(after, "core", "knots-absent"), []);
+    assert.ok(phaseProblems(after, "core", "long-op-return").length > 0);
+    assert.deepEqual(phaseProblems(after, "knots", "sighash-all"), []);
+    assert.deepEqual(phaseProblems(unified, "knots", "unified-sighash"), []);
+    assert.ok(phaseProblems(garnish, "knots", "sighash-all").some((problem) => problem.includes("OP_RETURN")));
   });
 
   it("refuses more than one input", () => {
