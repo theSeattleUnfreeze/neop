@@ -228,3 +228,18 @@ export const scriptTipState = pgTable(
     ),
   ]
 );
+
+/** BIP-329 notes for one wallet. Refs are txids, outpoints, or addresses. Never an xpub. */
+export const walletLabels = pgTable(
+  "wallet_labels",
+  {
+    id: serial("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => organizerAccounts.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    ref: text("ref").notNull(),
+    label: text("label").notNull(),
+  },
+  (t) => [uniqueIndex("wallet_labels_account_ref_uidx").on(t.accountId, t.kind, t.ref)]
+);

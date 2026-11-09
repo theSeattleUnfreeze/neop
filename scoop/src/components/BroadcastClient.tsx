@@ -5,6 +5,7 @@ import Link from "next/link";
 import { inspectPsbt } from "@/lib/broadcast/inspectPsbt";
 import { SplitSteps } from "@/components/SplitSteps";
 import { WalletIntake } from "@/components/WalletIntake";
+import { ConfirmRing } from "@/components/ConfirmRing";
 
 const LOCAL = { "content-type": "application/json", "x-scoop-local": "1" };
 
@@ -23,15 +24,7 @@ type Held = {
   outpoints: { txid: string; vout: number }[];
 };
 
-type WatchRow = { name: string; status: string };
-
-const STATUS: Record<string, string> = {
-  mempool: "In the mempool",
-  confirmed: "In a block",
-  missing: "Not seen yet",
-  conflict: "Another spend of this coin",
-  reorged: "The block was reorganized",
-};
+type WatchRow = { name: string; status: string; confirmations?: number };
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -66,6 +59,7 @@ export function BroadcastClient() {
   const [watchRows, setWatchRows] = useState<WatchRow[]>([]);
   const [watchReason, setWatchReason] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [reorgSeen, setReorgSeen] = useState(true);
   const knotsLock = useRef(false);
   const sendingRef = useRef(false);
   const heldRef = useRef(held);
@@ -202,6 +196,7 @@ export function BroadcastClient() {
       }
       setWatchReason(json.reason ?? null);
       setWatchRows(json.rows ?? []);
+      if ((json.rows ?? []).some((row) => row.status === "reorged")) setReorgSeen(false);
       if (json.rdts?.reasons?.length) setRdts(json.rdts.reasons);
       const hasKnots = currentRows.some((row) => row.flavor === "knots");
       if (json.phase === "send-knots" && hasKnots && coreAccepted && !knotsSent && !knotsLock.current) {
@@ -295,11 +290,19 @@ export function BroadcastClient() {
         <section className="scoop-panel" id="watch">
           <h3>Watch</h3>
           <p>{watchReason ?? "Asking the stack."}</p>
+          {!reorgSeen ? (
+            <p className="banner bad">
+              A block was replaced. This transaction is not in the chain it was in.{" "}
+              <button type="button" className="scoop-btn ghost" onClick={() => setReorgSeen(true)}>
+                Dismiss
+              </button>
+            </p>
+          ) : null}
           <ul className="broadcast-rows">
             {watchRows.map((row) => (
               <li key={row.name}>
                 <strong className="mono">{row.name}</strong>
-                <p>{STATUS[row.status] ?? "Not seen yet"}</p>
+                <ConfirmRing status={row.status} confirmations={row.confirmations ?? 0} />
               </li>
             ))}
           </ul>

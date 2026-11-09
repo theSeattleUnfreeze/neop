@@ -47,6 +47,14 @@ A signature commits to the outputs. Scoop refuses a PSBT that is already signed,
 
 When both families are signed, open Broadcast from Garnish. Scoop lists every file. Check each one. A Core accept cannot be taken back. Scoop then sends only the Core files, watches those inputs on the operator's node, and sends the Knots files only after every one of those inputs is spent in a Core block. A replacement counts. A null answer during initial block download is not spent. A Knots file signed with `SIGHASH_ALL` and no long `OP_RETURN` can still confirm on Core if it is broadcast first, so that wave waits. A Core file without the long `OP_RETURN` is allowed only when its inputs are already gone from Knots. A coin Scoop does not recognize fails the wave. One failed preflight sends nothing. The same rules are in [scripts/BROADCAST-WAVE.md](../scripts/BROADCAST-WAVE.md) for a run that does not use the page. If the dropped files spend from a wallet Scoop is not watching, Garnish offers the add-wallet step and keeps the drop. Watch offers it again after the send.
 
+The guided page at `/split` starts from one watched wallet and the coins still unspent on both chains. The operator picks a method, then drops unsigned PSBTs anywhere on the page. Scoop matches each file to its outpoint. A label on the row is optional and is not how the file is matched. A BIP-329 labels file, including Sparrow's sidecar, can be dropped while importing the wallet. An empty file adds nothing. Output labels prefill the row note. The extended key on an xpub line is not stored.
+
+- **Core garnish.** One Core file per coin, with the long OP_RETURN. Knots stays in the watched wallet. There is no Knots send.
+- **Unified sighash.** One Knots file per coin, signed in Shrike with unified sighash. No OP_RETURN. Core stays in the watched wallet, and Knots can be sent immediately.
+- **Drain.** One Core file and one Knots file per coin. The Core file is garnished. The Knots file is `SIGHASH_ALL` with no long OP_RETURN. Knots is sent only after those Core inputs are spent in a block.
+
+The long OP_RETURN is temporary, through **2027-09-01**. Core garnish and Drain show that warning when the clock or the Knots tip is inside the one-week window or past the expiry. Unified sighash does not depend on it. Garnish remains available on its own for a drop that is not tied to the wallet table. That freeform broadcast still requires one Core file and one Knots file for a coin on both chains, unless the request names a method and the files match it.
+
 ## One wave, and the privacy cost
 
 Loss prevention and chain privacy pull apart the moment a script is going to be spent.
@@ -94,6 +102,7 @@ The balance, for a pre-fork balance that is still sitting in a single-vendor aff
 - One row per outpoint (`txid:vout`), grouped under the address.
 - Presence and the replay flag are on the outpoint. A mixed group is labeled mixed and is not a replay flag.
 - **Needs split** selects replay-risk rows (the same outpoint unspent on both tips). A Core-bound row can still have presence `both` because Core has spent it; the flag is core-bound, and the checklist counts those separately.
+- **Core** and **Knots** count coins still unspent on that chain. A coin Core has already spent stays in All, and in Knots while Knots still holds it.
 - Per script, after a sync: **witness still hashed**, **witness published** (some transaction on either tip is not just a current funding output), or **unknown** when an indexer did not answer. That flag is not "safe to spend."
 - The split checklist states the one-wave exit, the common-input cost, and that a multisig spend publishes the cosigner keys. Scoop still does not sign.
 

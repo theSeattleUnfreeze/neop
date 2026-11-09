@@ -13,6 +13,8 @@ import {
   type IntakeKind,
 } from "@/lib/organizer/walletIntake";
 import { DEFAULT_GAP_LIMIT } from "@/lib/electrum/gap";
+import { LabelFileField } from "@/components/LabelFileField";
+import type { LabelRecord } from "@/lib/labels/bip329";
 
 type Step = "kind" | "label" | "xpub" | "address" | "manual" | "review";
 
@@ -82,6 +84,9 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     { label: string; xpub: string; derivationPath: string }[]
   >([]);
   const [sparrowFileName, setSparrowFileName] = useState("");
+  const [labelFileName, setLabelFileName] = useState("");
+  const [labelRecords, setLabelRecords] = useState<LabelRecord[]>([]);
+  const [labelFileError, setLabelFileError] = useState<string | null>(null);
   const [multisig, setMultisig] = useState<{
     m: number;
     n: number;
@@ -130,6 +135,9 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
     setSparrowNote("");
     setSparrowChoices([]);
     setSparrowFileName("");
+    setLabelFileName("");
+    setLabelRecords([]);
+    setLabelFileError(null);
     setMultisig(null);
     sparrowFile.current = "";
   }, []);
@@ -388,6 +396,21 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
       if (!res.ok) {
         throw new Error(typeof json.error === "string" ? json.error : "create failed");
       }
+      const created = json.account as { id?: number } | undefined;
+      if (created?.id && labelRecords.length) {
+        const saved = await fetch(`/api/organizer/accounts/${created.id}/labels`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-scoop-local": "1" },
+          body: JSON.stringify({ records: labelRecords }),
+        });
+        if (!saved.ok) {
+          await onCreated();
+          const failed = await readJson(saved);
+          throw new Error(
+            typeof failed.error === "string" ? failed.error : "The wallet was saved, but the labels were not."
+          );
+        }
+      }
       await onCreated();
       const sync = json.sync as { pending?: boolean } | undefined;
       if (sync?.pending) {
@@ -506,6 +529,17 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
                 placeholder="Check OP_RETURN wedge before spend"
               />
             </label>
+            <LabelFileField
+              fileName={labelFileName}
+              error={labelFileError}
+              count={labelRecords.length}
+              onParsed={(name, records, suggestedName, fileError) => {
+                setLabelFileName(name);
+                setLabelRecords(records);
+                setLabelFileError(fileError);
+                if (suggestedName) setLabel((current) => current.trim() || suggestedName);
+              }}
+            />
           </>
         ) : null}
 
@@ -520,6 +554,17 @@ export function WalletIntake({ hasWallets, open, onOpen, onClose, onCreated }: P
               form can open. Scoop keeps the account key. A <code>zpub</code> or <code>ypub</code>{" "}
               uses its usual path; otherwise paste the derivation path too.
             </p>
+            <LabelFileField
+              fileName={labelFileName}
+              error={labelFileError}
+              count={labelRecords.length}
+              onParsed={(name, records, suggestedName, fileError) => {
+                setLabelFileName(name);
+                setLabelRecords(records);
+                setLabelFileError(fileError);
+                if (suggestedName) setLabel((current) => current.trim() || suggestedName);
+              }}
+            />
             <label className="field">
               <span>Older wallet file</span>
               <input type="file" onChange={(e) => void onSparrowFile(e.target.files?.[0])} />
