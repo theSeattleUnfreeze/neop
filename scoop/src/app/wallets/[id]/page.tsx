@@ -20,7 +20,7 @@ export default async function WalletDetailPage({
   }
   return (
     <Suspense fallback={<p className="muted">Loading…</p>}>
-      <AccountDetailClient id={walletId} />
+      <AccountDetailClient key={walletId} id={walletId} />
     </Suspense>
   );
 }

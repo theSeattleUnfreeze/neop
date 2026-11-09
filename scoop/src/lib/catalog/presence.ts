@@ -62,9 +62,10 @@ export function isSpill(core: TipView, knots: TipView): boolean {
   return true;
 }
 
+/** Unspent on that tip. A spent coin is history on that chain, not part of its filter. */
 export function filterByFlavor(row: CoinRow, flavor: Tip): boolean {
-  if (flavor === "core") return row.core.status !== "absent";
-  return row.knots.status !== "absent";
+  const tip = flavor === "core" ? row.core : row.knots;
+  return tip.status === "unspent";
 }
 
 export type CatalogFilter = "all" | "core" | "knots" | "spills" | "replay";
@@ -86,12 +87,27 @@ export function filterCatalogRows<
   T extends CoinRow & { spill: boolean; replayRisk?: boolean },
 >(rows: T[], mode: CatalogFilter): T[] {
   if (mode === "all") return rows;
-  if (mode === "core") return rows.filter((r) => filterByFlavor(r, "core"));
-  if (mode === "knots") return rows.filter((r) => filterByFlavor(r, "knots"));
-  if (mode === "replay") {
-    return rows.filter((r) => r.replayRisk === true || sameUnspentOutpoint(r.core, r.knots));
+  return catalogViews(rows)[mode];
+}
+
+/**
+ * One pass over the catalog. The wallet page keeps this from the latest watch
+ * poll and only swaps which slice is on screen when the filter changes.
+ */
+export function catalogViews<
+  T extends CoinRow & { spill: boolean; replayRisk?: boolean },
+>(rows: T[]): Record<CatalogFilter, T[]> {
+  const core: T[] = [];
+  const knots: T[] = [];
+  const spills: T[] = [];
+  const replay: T[] = [];
+  for (const row of rows) {
+    if (row.core.status === "unspent") core.push(row);
+    if (row.knots.status === "unspent") knots.push(row);
+    if (row.spill) spills.push(row);
+    if (row.replayRisk === true || sameUnspentOutpoint(row.core, row.knots)) replay.push(row);
   }
-  return rows.filter((r) => r.spill);
+  return { all: rows, core, knots, spills, replay };
 }
 
 export function annotate(row: CoinRow) {
