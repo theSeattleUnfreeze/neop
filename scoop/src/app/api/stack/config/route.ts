@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { localOnly } from "@/lib/api/localOnly";
 import { loadStackConfig, normalizeStackConfig, saveStackConfig } from "@/lib/stack/config";
+import { discoverStackPaths } from "@/lib/stack/discover";
 import type { StackConfig } from "@/lib/stack/types";
 
 export const runtime = "nodejs";
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
   const denied = localOnly(req);
   if (denied) return denied;
   try {
-    return NextResponse.json({ config: loadStackConfig() });
+    return NextResponse.json({ config: await discoverStackPaths(loadStackConfig()) });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

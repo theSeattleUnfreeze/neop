@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { localOnly } from "@/lib/api/localOnly";
 import { loadStackConfig } from "@/lib/stack/config";
+import { discoverStackPaths } from "@/lib/stack/discover";
 import { probeStack } from "@/lib/stack/probe";
 
 export const runtime = "nodejs";
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
   const denied = localOnly(req);
   if (denied) return denied;
   try {
-    const config = loadStackConfig();
+    const config = await discoverStackPaths(loadStackConfig());
     const status = await probeStack(config);
     return NextResponse.json(status);
   } catch (err) {
