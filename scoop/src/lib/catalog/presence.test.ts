@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   annotate,
+  catalogViews,
   filterByFlavor,
   filterCatalogRows,
   isCoreBoundSuccess,
@@ -47,9 +48,23 @@ describe("presence", () => {
     });
     const rows = [both, coreOnly, knotsOnly, spillRow];
     assert.equal(filterCatalogRows(rows, "all").length, 4);
-    assert.equal(filterCatalogRows(rows, "core").length, 3);
-    assert.equal(filterCatalogRows(rows, "knots").length, 3);
+    assert.equal(filterCatalogRows(rows, "core").length, 2);
+    assert.equal(filterCatalogRows(rows, "knots").length, 2);
     assert.equal(filterCatalogRows(rows, "spills").length, 1);
+  });
+
+  it("keeps a spent Core coin out of the Core filter", () => {
+    const coreBound = annotate({
+      scriptId: 5,
+      core: spent(),
+      knots: unspent("cc".repeat(32)),
+    });
+    const views = catalogViews([coreBound]);
+    assert.equal(views.all.length, 1);
+    assert.equal(views.core.length, 0);
+    assert.equal(views.knots.length, 1);
+    assert.equal(filterByFlavor(coreBound, "core"), false);
+    assert.equal(filterByFlavor(coreBound, "knots"), true);
   });
 
   it("detects core-bound success without spill", () => {

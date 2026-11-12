@@ -1,15 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { CoinTable, type ScriptWitness } from "@/components/CoinTable";
 import { SplitChecklist } from "@/components/SplitChecklist";
-import { SplitForkList } from "@/components/SplitFork";
-import type { CoinFork } from "@/lib/fork/forks";
 import { formatActivityStamp } from "@/lib/catalog/activity";
-import { filterCatalogRows, type CatalogFilter } from "@/lib/catalog/presence";
+import { catalogViews, type CatalogFilter } from "@/lib/catalog/presence";
 import type { OutpointRow } from "@/lib/catalog/outpoints";
 import {
   DEFAULT_EXPLORER_CORE,
@@ -54,25 +52,100 @@ const SPILL_EXPLAINER =
 
 const POLL_MS = 10_000;
 
+type DetailSnap = {
+  account: Account;
+  rows: Row[];
+  scripts: ScriptWitness[];
+  explorers: ExplorerBases;
+  balance: Balance | null;
+  lastReceived: ActivityStampJson | null;
+  lastSent: ActivityStampJson | null;
+  health: Health;
+};
+
+/** Last watch poll for this tab. Memory only — rows carry addresses. */
+const detailCache = new Map<number, DetailSnap>();
+
+function rowsSignature(rows: Row[]): string {
+  let sig = String(rows.length);
+  for (const row of rows) {
+    sig += `|${row.txid}:${row.vout}:${row.core.status}:${row.knots.status}:${row.core.valueSats ?? ""}:${row.knots.valueSats ?? ""}:${row.replayRisk ? 1 : 0}:${row.spill ? 1 : 0}`;
+  }
+  return sig;
+}
+
+function scriptsSignature(scripts: ScriptWitness[]): string {
+  return scripts
+    .map(
+      (script) =>
+        `${script.id}:${script.witnessState ?? ""}:${script.witnessExposedTxid ?? ""}:${script.witnessExposedHeight ?? ""}`
+    )
+    .join("|");
+}
+
+function sameAccount(a: Account, b: Account): boolean {
+  return (
+    a.id === b.id &&
+    a.label === b.label &&
+    a.notes === b.notes &&
+    a.reminder === b.reminder &&
+    a.source === b.source &&
+    a.lastSyncedAt === b.lastSyncedAt &&
+    a.manualCoreSats === b.manualCoreSats &&
+    a.manualKnotsSats === b.manualKnotsSats
+  );
+}
+
+function sameBalance(a: Balance | null, b: Balance | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.coreSats === b.coreSats &&
+    a.knotsSats === b.knotsSats &&
+    a.bothCount === b.bothCount &&
+    a.spillCount === b.spillCount &&
+    a.coreKnown === b.coreKnown &&
+    a.knotsKnown === b.knotsKnown
+  );
+}
+
+function sameStamp(a: ActivityStampJson | null, b: ActivityStampJson | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.height === b.height && a.at === b.at;
+}
+
+function sameHealth(a: Health, b: Health): boolean {
+  return a.fulcrumError === b.fulcrumError && a.shulcrumError === b.shulcrumError;
+}
+
 export function AccountDetailClient({ id }: Props) {
   const searchParams = useSearchParams();
-  const highlightOutpoint = parseOutpointQuery(searchParams.get("outpoint"));
-  const [account, setAccount] = useState<Account | null>(null);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [scripts, setScripts] = useState<ScriptWitness[]>([]);
-  const [explorers, setExplorers] = useState<ExplorerBases>({
-    core: DEFAULT_EXPLORER_CORE,
-    knots: DEFAULT_EXPLORER_KNOTS,
-  });
-  const [balance, setBalance] = useState<Balance | null>(null);
-  const [lastReceived, setLastReceived] = useState<ActivityStampJson | null>(null);
-  const [lastSent, setLastSent] = useState<ActivityStampJson | null>(null);
-  const [health, setHealth] = useState<Health>({});
+  const outpointQuery = searchParams.get("outpoint");
+  const highlightOutpoint = useMemo(
+    () => parseOutpointQuery(outpointQuery),
+    [outpointQuery]
+  );
+  const cached = detailCache.get(id);
+  const [account, setAccount] = useState<Account | null>(cached?.account ?? null);
+  const [rows, setRows] = useState<Row[]>(cached?.rows ?? []);
+  const [scripts, setScripts] = useState<ScriptWitness[]>(cached?.scripts ?? []);
+  const [explorers, setExplorers] = useState<ExplorerBases>(
+    cached?.explorers ?? {
+      core: DEFAULT_EXPLORER_CORE,
+      knots: DEFAULT_EXPLORER_KNOTS,
+    }
+  );
+  const [balance, setBalance] = useState<Balance | null>(cached?.balance ?? null);
+  const [lastReceived, setLastReceived] = useState<ActivityStampJson | null>(
+    cached?.lastReceived ?? null
+  );
+  const [lastSent, setLastSent] = useState<ActivityStampJson | null>(cached?.lastSent ?? null);
+  const [health, setHealth] = useState<Health>(cached?.health ?? {});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [watching, setWatching] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
-  const [forks, setForks] = useState<CoinFork[]>([]);
   const [filter, setFilter] = useState<CatalogFilter>("all");
   const [editOpen, setEditOpen] = useState(false);
   const syncInFlight = useRef(false);
@@ -83,6 +156,8 @@ export function AccountDetailClient({ id }: Props) {
   const draftDirty = useRef(false);
   /** False after a sync error. The 10s poll stays quiet until Sync now succeeds. */
   const watchOk = useRef(true);
+  const rowsSig = useRef(cached ? rowsSignature(cached.rows) : "");
+  const scriptsSigRef = useRef(cached ? scriptsSignature(cached.scripts) : "");
 
   const applyPayload = useCallback((json: {
     account?: Account;
@@ -100,6 +175,7 @@ export function AccountDetailClient({ id }: Props) {
       if (json.account.source === "electrum" && watchOk.current) setWatching(true);
       const incoming = json.account;
       setAccount((prev) => {
+        if (prev && prev.id === incoming.id && !draftDirty.current && sameAccount(prev, incoming)) return prev;
         if (!prev || prev.id !== incoming.id || !draftDirty.current) return incoming;
         return {
           ...incoming,
@@ -111,14 +187,62 @@ export function AccountDetailClient({ id }: Props) {
         };
       });
     }
-    if (json.rows) setRows(json.rows);
-    if (json.scripts) setScripts(json.scripts);
-    if (json.balance !== undefined) setBalance(json.balance ?? null);
-    if (json.lastReceived !== undefined) setLastReceived(json.lastReceived ?? null);
-    if (json.lastSent !== undefined) setLastSent(json.lastSent ?? null);
-    if (json.health) setHealth(json.health);
-    if (json.explorers?.core && json.explorers?.knots) setExplorers(json.explorers);
-  }, []);
+    const prev = detailCache.get(id);
+    const nextRows = json.rows ?? prev?.rows ?? [];
+    const rowSig = json.rows ? rowsSignature(json.rows) : rowsSig.current;
+    const rowsChanged = json.rows != null && rowSig !== rowsSig.current;
+    if (rowsChanged) rowsSig.current = rowSig;
+    const next: DetailSnap | null = (json.account ?? prev?.account)
+      ? {
+          account: (json.account ?? prev!.account) as Account,
+          rows: nextRows,
+          scripts: json.scripts ?? prev?.scripts ?? [],
+          explorers:
+            json.explorers?.core && json.explorers?.knots
+              ? json.explorers
+              : (prev?.explorers ?? {
+                  core: DEFAULT_EXPLORER_CORE,
+                  knots: DEFAULT_EXPLORER_KNOTS,
+                }),
+          balance: json.balance !== undefined ? (json.balance ?? null) : (prev?.balance ?? null),
+          lastReceived:
+            json.lastReceived !== undefined
+              ? (json.lastReceived ?? null)
+              : (prev?.lastReceived ?? null),
+          lastSent: json.lastSent !== undefined ? (json.lastSent ?? null) : (prev?.lastSent ?? null),
+          health: json.health ?? prev?.health ?? {},
+        }
+      : null;
+    if (next) detailCache.set(id, next);
+    const scriptsSig = json.scripts ? scriptsSignature(json.scripts) : null;
+    startTransition(() => {
+      if (rowsChanged && json.rows) setRows(json.rows);
+      if (json.scripts && scriptsSig !== scriptsSigRef.current) {
+        scriptsSigRef.current = scriptsSig!;
+        setScripts(json.scripts);
+      }
+      if (json.balance !== undefined) {
+        setBalance((prev) => (sameBalance(prev, json.balance ?? null) ? prev : (json.balance ?? null)));
+      }
+      if (json.lastReceived !== undefined) {
+        setLastReceived((prev) =>
+          sameStamp(prev, json.lastReceived ?? null) ? prev : (json.lastReceived ?? null)
+        );
+      }
+      if (json.lastSent !== undefined) {
+        setLastSent((prev) => (sameStamp(prev, json.lastSent ?? null) ? prev : (json.lastSent ?? null)));
+      }
+      if (json.health) {
+        setHealth((prev) => (sameHealth(prev, json.health!) ? prev : json.health!));
+      }
+      if (json.explorers?.core && json.explorers?.knots) {
+        const explorers = json.explorers;
+        setExplorers((prev) =>
+          prev.core === explorers.core && prev.knots === explorers.knots ? prev : explorers
+        );
+      }
+    });
+  }, [id]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -129,13 +253,6 @@ export function AccountDetailClient({ id }: Props) {
       return null;
     }
     applyPayload(json);
-    try {
-      const splits = await fetch(`/api/organizer/splits?accountId=${id}`);
-      const splitsJson = await splits.json();
-      if (splits.ok && Array.isArray(splitsJson.forks)) setForks(splitsJson.forks);
-    } catch {
-      /* wallet details still load when the splits route is down */
-    }
     return json.account as Account;
   }, [id, applyPayload]);
 
@@ -164,14 +281,16 @@ export function AccountDetailClient({ id }: Props) {
         watchOk.current = true;
         setWatching(true);
         setError(null);
-        setHealth({
-          fulcrumError: json.health?.fulcrumError,
-          shulcrumError: json.health?.shulcrumError,
+        applyPayload({
+          rows: json.rows,
+          balance: json.balance,
+          lastReceived: json.lastReceived,
+          lastSent: json.lastSent,
+          health: {
+            fulcrumError: json.health?.fulcrumError,
+            shulcrumError: json.health?.shulcrumError,
+          },
         });
-        if (json.rows) setRows(json.rows);
-        if (json.balance) setBalance(json.balance);
-        if (json.lastReceived) setLastReceived(json.lastReceived);
-        if (json.lastSent) setLastSent(json.lastSent);
         if (opts.manual) {
           if (json.pending) {
             setSyncMsg("Sync did not finish. Balances stay unknown until Electrum answers.");
@@ -191,7 +310,7 @@ export function AccountDetailClient({ id }: Props) {
         if (opts.manual) setBusy(false);
       }
     },
-    [id, load]
+    [id, load, applyPayload]
   );
 
   useEffect(() => {
@@ -258,15 +377,17 @@ export function AccountDetailClient({ id }: Props) {
     }
   };
 
+  const views = useMemo(() => catalogViews(rows), [rows]);
+
   if (!account && !error) return <p className="muted">Loading…</p>;
   if (!account) return <p className="banner bad">{error}</p>;
 
   const filterCounts: Record<CatalogFilter, number> = {
-    all: rows.length,
-    replay: filterCatalogRows(rows, "replay").length,
-    core: filterCatalogRows(rows, "core").length,
-    knots: filterCatalogRows(rows, "knots").length,
-    spills: filterCatalogRows(rows, "spills").length,
+    all: views.all.length,
+    replay: views.replay.length,
+    core: views.core.length,
+    knots: views.knots.length,
+    spills: views.spills.length,
   };
 
   const FILTERS: { id: CatalogFilter; label: string }[] = [
@@ -431,26 +552,16 @@ export function AccountDetailClient({ id }: Props) {
 
       {account.source === "electrum" ? (
         <>
-          <SplitChecklist
-            rows={rows}
-            scripts={scripts}
-            explorers={explorers}
-            onExplorersChange={setExplorers}
-          />
-          <section className="scoop-panel">
-            <div className="section-head">
-              <h3>Splits</h3>
-            </div>
-            <p className="muted">
-              Coins from this wallet that were spent on one flavor, or spent as a different
-              transaction on each flavor. Each column is where that spend paid.
-            </p>
-            <SplitForkList forks={forks} />
-          </section>
           <section className="scoop-panel">
             <div className="section-head">
               <h3>Outpoints</h3>
             </div>
+            {filterCounts.replay > 0 ? (
+              <p className="banner warn">
+                {filterCounts.replay} {filterCounts.replay === 1 ? "coin is" : "coins are"} still unspent on both chains.{" "}
+                <Link href={`/split?account=${id}`}>Split them</Link>
+              </p>
+            ) : null}
             <div className="filter-row" role="tablist" aria-label="Tip filter">
               {FILTERS.map((f) => (
                 <button
@@ -467,20 +578,36 @@ export function AccountDetailClient({ id }: Props) {
               <p className="muted spill-explainer">{SPILL_EXPLAINER}</p>
             ) : null}
             <CoinTable
-              rows={rows}
-              filter={filter}
+              rows={views[filter]}
               scripts={scripts}
               explorers={explorers}
               onExplorersChange={setExplorers}
               highlightOutpoint={highlightOutpoint}
-              emptyHint={filter === "spills" ? "No spills in this wallet." : undefined}
+              emptyHint={
+                filter === "spills"
+                  ? "No spills in this wallet."
+                  : filter === "core"
+                    ? "No unspent coins on Core."
+                    : filter === "knots"
+                      ? "No unspent coins on Knots."
+                      : filter === "replay"
+                        ? "No coins still unspent on both chains."
+                        : undefined
+              }
             />
             <p className="muted">
-              Needs split shows outpoints unspent on both chains. Mixed on the address above them is
-              not replay risk. Core uses Fulcrum; Knots uses your Blake2b Electrum. Shrike only sees
-              Knots.
+              Needs split shows outpoints unspent on both chains. Core and Knots count coins still
+              unspent on that chain. Mixed on the address above them is not replay risk. Core uses
+              Fulcrum; Knots uses your Blake2b Electrum. Shrike only sees Knots.{" "}
+              <Link href={`/splits?account=${id}`}>Split history</Link> is on its own page.
             </p>
           </section>
+          <SplitChecklist
+            rows={rows}
+            scripts={scripts}
+            explorers={explorers}
+            onExplorersChange={setExplorers}
+          />
         </>
       ) : null}
     </div>

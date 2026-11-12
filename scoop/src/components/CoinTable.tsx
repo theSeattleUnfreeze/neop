@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { formatActivityStamp } from "@/lib/catalog/activity";
 import type { CatalogFilter } from "@/lib/catalog/presence";
 import { filterCatalogRows } from "@/lib/catalog/presence";
@@ -76,7 +77,7 @@ function exposureFromScript(script: ScriptWitness | undefined): WitnessExposureI
   };
 }
 
-export function CoinTable({
+export const CoinTable = memo(function CoinTable({
   rows,
   filter = "all",
   emptyHint,
@@ -93,14 +94,16 @@ export function CoinTable({
   onExplorersChange?: (next: ExplorerBases) => void;
   highlightOutpoint?: { txid: string; vout: number } | null;
 }) {
-  const byScript = new Map(scripts.map((s) => [s.id, s]));
-  const shown = groupOutpointRows(rows)
-    .map((group) => ({
-      ...group,
-      outpoints: filterCatalogRows(group.outpoints, filter),
-      exposure: exposureFromScript(byScript.get(group.scriptId)),
-    }))
-    .filter((group) => group.outpoints.length > 0);
+  const shown = useMemo(() => {
+    const byScript = new Map(scripts.map((s) => [s.id, s]));
+    return groupOutpointRows(rows)
+      .map((group) => ({
+        ...group,
+        outpoints: filterCatalogRows(group.outpoints, filter),
+        exposure: exposureFromScript(byScript.get(group.scriptId)),
+      }))
+      .filter((group) => group.outpoints.length > 0);
+  }, [rows, scripts, filter]);
 
   if (!rows.length) {
     return <p className="muted">{emptyHint ?? "No outpoints in this wallet yet."}</p>;
@@ -111,6 +114,14 @@ export function CoinTable({
   return (
     <div className="coin-table-wrap">
       <table className="coin-table">
+        <colgroup>
+          <col className="col-outpoint" />
+          <col className="col-received" />
+          <col className="col-core" />
+          <col className="col-knots" />
+          <col className="col-presence" />
+          <col className="col-flags" />
+        </colgroup>
         <thead>
           <tr>
             <th>Outpoint</th>
@@ -135,7 +146,7 @@ export function CoinTable({
       </table>
     </div>
   );
-}
+});
 
 function GroupRows({
   group,
@@ -159,7 +170,8 @@ function GroupRows({
     <>
       <tr className="coin-group">
         <td colSpan={6}>
-          <span className="mono">{group.address ?? `script ${group.scriptId}`}</span>
+          <div className="coin-group-line">
+          <span className="mono coin-group-addr">{group.address ?? `script ${group.scriptId}`}</span>
           {group.mixed ? <span className="presence-chip mixed">Mixed</span> : null}
           {group.witness === "published" ? (
             <WitnessExposureBadge
@@ -175,6 +187,7 @@ function GroupRows({
               Different outpoints, different chains. Not replay risk.
             </span>
           ) : null}
+          </div>
         </td>
       </tr>
       {group.outpoints.map((r) => {
@@ -202,9 +215,11 @@ function GroupRows({
             </span>
           </td>
           <td className="flags">
-            {r.replayRisk ? <span className="flag spill">replay</span> : null}
-            {r.coreBoundOk ? <span className="flag ok">core-bound ok</span> : null}
-            {r.spill ? <span className="flag spill">spill</span> : null}
+            <span className="flag-list">
+              {r.replayRisk ? <span className="flag spill">replay</span> : null}
+              {r.coreBoundOk ? <span className="flag ok">core-bound ok</span> : null}
+              {r.spill ? <span className="flag spill">spill</span> : null}
+            </span>
           </td>
         </tr>
         );
