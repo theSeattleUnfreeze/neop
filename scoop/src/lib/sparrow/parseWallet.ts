@@ -178,16 +178,29 @@ function walk(node: unknown, accounts: SparrowAccount[]) {
   const derivationPath =
     typeof rec.derivationPath === "string"
       ? rec.derivationPath
-      : typeof deriv?.derivationPath === "string"
-        ? deriv.derivationPath
-        : "";
-  const masterFingerprint = typeof deriv?.masterFingerprint === "string" ? deriv.masterFingerprint : "";
+      : typeof rec.derivation === "string"
+        ? rec.derivation
+        : typeof deriv?.derivationPath === "string"
+          ? deriv.derivationPath
+          : "";
+  const masterFingerprint =
+    typeof deriv?.masterFingerprint === "string"
+      ? deriv.masterFingerprint
+      : typeof rec.root_fingerprint === "string"
+        ? rec.root_fingerprint
+        : typeof rec.masterFingerprint === "string"
+          ? rec.masterFingerprint
+          : "";
   const label = typeof rec.label === "string" ? rec.label : "";
   if (xpub) pushAccount(accounts, { label, xpub, derivationPath, masterFingerprint });
   for (const [key, value] of Object.entries(rec)) {
     if (key === "seed" || key === "mnemonic" || key === "masterPrivateExtendedKey") continue;
     if (value && typeof value === "object") walk(value, accounts);
   }
+}
+
+function isElectrumWallet(rec: Record<string, unknown>): boolean {
+  return typeof rec.wallet_type === "string" && rec.keystore != null && typeof rec.keystore === "object";
 }
 
 export function viewFromWalletJson(parsed: unknown): SparrowWalletView {
@@ -204,13 +217,26 @@ export function viewFromWalletJson(parsed: unknown): SparrowWalletView {
     throw new Error("No extended public key in that file. Paste the account xpub from Sparrow instead.");
   }
   const policyType = typeof rec.policyType === "string" ? rec.policyType : "";
+  const electrum = isElectrumWallet(rec);
+  const keystore =
+    electrum && rec.keystore && typeof rec.keystore === "object"
+      ? (rec.keystore as Record<string, unknown>)
+      : null;
+  const name =
+    typeof rec.name === "string" && rec.name
+      ? rec.name
+      : typeof keystore?.label === "string"
+        ? keystore.label
+        : "";
   const note =
     policyType === "MULTI"
       ? "This is a multisig wallet. Scoop can watch one cosigner xpub, which is not the multisig script. Paste an output descriptor if you have one."
-      : "";
+      : electrum
+        ? "Electrum wallet export. Scoop keeps the account xpub and derivation path only."
+        : "";
   return {
-    name: typeof rec.name === "string" ? rec.name : "",
-    policyType,
+    name,
+    policyType: policyType || (electrum ? "SINGLE" : ""),
     scriptType,
     accounts,
     note,

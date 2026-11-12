@@ -13,6 +13,8 @@ type Props = {
   openTaskCount: number;
   unreadNotificationCount: number;
   estimate: boolean;
+  coreKnown?: boolean;
+  knotsKnown?: boolean;
   lastSyncedAt?: string | null;
 };
 
@@ -24,7 +26,13 @@ function fmtSats(s: string) {
   }
 }
 
+function tipLabel(known: boolean | undefined, sats: string, estimate: boolean) {
+  if (estimate || known !== false) return fmtSats(sats);
+  return "unknown";
+}
+
 export function AccountCard(props: Props) {
+  const tipGap = !props.estimate && (props.coreKnown === false || props.knotsKnown === false);
   return (
     <Link href={`/wallets/${props.id}`} className="account-card">
       <div className="account-card-top">
@@ -33,8 +41,12 @@ export function AccountCard(props: Props) {
       </div>
       {props.reminder ? <p className="muted reminder">{props.reminder}</p> : null}
       <div className="balance-row">
-        <span className="presence-chip core">Core {fmtSats(props.coreSats)}</span>
-        <span className="presence-chip knots">Knots {fmtSats(props.knotsSats)}</span>
+        <span className={`presence-chip core${props.coreKnown === false ? " none" : ""}`}>
+          Core {tipLabel(props.coreKnown, props.coreSats, props.estimate)}
+        </span>
+        <span className={`presence-chip knots${props.knotsKnown === false ? " none" : ""}`}>
+          Knots {tipLabel(props.knotsKnown, props.knotsSats, props.estimate)}
+        </span>
       </div>
       <div className="account-meta">
         {props.bothCount > 0 ? (
@@ -47,6 +59,7 @@ export function AccountCard(props: Props) {
           <span className="meta-badge alert">{props.unreadNotificationCount} alerts</span>
         ) : null}
         {props.estimate ? <span className="muted">estimate</span> : null}
+        {tipGap ? <span className="muted">tip incomplete</span> : null}
       </div>
       {props.lastSyncedAt ? (
         <p className="muted tiny">Synced {new Date(props.lastSyncedAt).toLocaleString()}</p>

@@ -19,6 +19,8 @@ type Card = {
     knotsSats: string;
     bothCount: number;
     estimate: boolean;
+    coreKnown?: boolean;
+    knotsKnown?: boolean;
   };
   openTaskCount: number;
   unreadNotificationCount: number;
@@ -35,9 +37,16 @@ type Dash = {
   portfolio: {
     coreSats: string;
     knotsSats: string;
+    coreUtxoCount?: number;
+    knotsUtxoCount?: number;
+    utxoCount?: number;
     bothCount: number;
     spillCount: number;
     accountCount: number;
+    coreKnown?: boolean;
+    knotsKnown?: boolean;
+    coreError?: string | null;
+    knotsError?: string | null;
   };
   cards: Card[];
   unreadNotificationCount: number;
@@ -179,20 +188,40 @@ export function DashboardClient() {
           </p>
         ) : null}
         {error ? <p className="banner bad">{error}</p> : null}
+        {dash && (dash.portfolio.coreKnown === false || dash.portfolio.knotsKnown === false) ? (
+          <p className="banner warn">
+            {dash.portfolio.coreKnown === false && dash.portfolio.knotsKnown === false
+              ? "Neither Electrum tip answered the last sync. Balances are unknown, not zero."
+              : dash.portfolio.coreKnown === false
+                ? `Core Electrum did not answer${dash.portfolio.coreError ? ` (${dash.portfolio.coreError})` : ""}. Core totals are unknown, not zero.`
+                : `Knots Electrum did not answer${dash.portfolio.knotsError ? ` (${dash.portfolio.knotsError})` : ""}. Knots totals are unknown, not zero.`}{" "}
+            Check the <Link href="/stack">Stack</Link> page.
+          </p>
+        ) : null}
         {dash ? (
           <div className="portfolio-strip">
             <div>
               <span className="muted">Core</span>
-              <strong>{BigInt(dash.portfolio.coreSats).toLocaleString()} sats</strong>
+              <strong>
+                {dash.portfolio.coreKnown === false
+                  ? "unknown"
+                  : `${BigInt(dash.portfolio.coreSats).toLocaleString()} sats`}
+              </strong>
             </div>
             <div>
               <span className="muted">Knots</span>
-              <strong>{BigInt(dash.portfolio.knotsSats).toLocaleString()} sats</strong>
+              <strong>
+                {dash.portfolio.knotsKnown === false
+                  ? "unknown"
+                  : `${BigInt(dash.portfolio.knotsSats).toLocaleString()} sats`}
+              </strong>
             </div>
             <div>
               <span className="muted">Replay outpoints / spills</span>
               <strong>
-                {dash.portfolio.bothCount} / {dash.portfolio.spillCount}
+                {dash.portfolio.coreKnown !== false && dash.portfolio.knotsKnown !== false
+                  ? `${dash.portfolio.bothCount} / ${dash.portfolio.spillCount}`
+                  : "unknown"}
               </strong>
             </div>
             <div>
@@ -244,6 +273,8 @@ export function DashboardClient() {
                 openTaskCount={c.openTaskCount}
                 unreadNotificationCount={c.unreadNotificationCount}
                 estimate={c.balance.estimate}
+                coreKnown={c.balance.coreKnown}
+                knotsKnown={c.balance.knotsKnown}
                 lastSyncedAt={c.account.lastSyncedAt}
               />
             ))}

@@ -26,6 +26,8 @@ type Balance = {
   knotsSats: string;
   bothCount: number;
   spillCount?: number;
+  coreKnown?: boolean;
+  knotsKnown?: boolean;
 };
 
 type Health = {
@@ -77,10 +79,12 @@ export function AccountDetailClient({ id }: Props) {
       });
       if (json.rows) setRows(json.rows);
       if (json.balance) setBalance(json.balance);
-      const n = (json.newNotifications ?? []).length;
-      setSyncMsg(
-        n ? `Synced. ${n} replay alert${n === 1 ? "" : "s"}.` : "Synced."
-      );
+      if (json.pending) {
+        setSyncMsg("Sync did not finish. Balances stay unknown until Electrum answers.");
+      } else {
+        const n = (json.newNotifications ?? []).length;
+        setSyncMsg(n ? `Synced. ${n} replay alert${n === 1 ? "" : "s"}.` : "Synced.");
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -157,19 +161,40 @@ export function AccountDetailClient({ id }: Props) {
         {health.shulcrumError ? (
           <p className="banner warn">Knots Electrum: {health.shulcrumError}</p>
         ) : null}
+        {balance && (balance.coreKnown === false || balance.knotsKnown === false) ? (
+          <p className="banner warn">
+            {balance.coreKnown === false && balance.knotsKnown === false
+              ? "Neither Electrum tip answered. These balances are unknown, not zero."
+              : balance.coreKnown === false
+                ? "Core Electrum did not answer. Core sats are unknown until that tip is up."
+                : "Knots Electrum did not answer. Knots sats are unknown until that tip is up."}
+          </p>
+        ) : null}
         {balance ? (
           <div className="portfolio-strip">
             <div>
               <span className="muted">Core</span>
-              <strong>{BigInt(balance.coreSats).toLocaleString()} sats</strong>
+              <strong>
+                {balance.coreKnown === false
+                  ? "unknown"
+                  : `${BigInt(balance.coreSats).toLocaleString()} sats`}
+              </strong>
             </div>
             <div>
               <span className="muted">Knots</span>
-              <strong>{BigInt(balance.knotsSats).toLocaleString()} sats</strong>
+              <strong>
+                {balance.knotsKnown === false
+                  ? "unknown"
+                  : `${BigInt(balance.knotsSats).toLocaleString()} sats`}
+              </strong>
             </div>
             <div>
               <span className="muted">Replay outpoints</span>
-              <strong>{balance.bothCount}</strong>
+              <strong>
+                {balance.coreKnown !== false && balance.knotsKnown !== false
+                  ? balance.bothCount
+                  : "unknown"}
+              </strong>
             </div>
           </div>
         ) : null}

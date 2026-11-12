@@ -41,8 +41,10 @@ export async function GET(_req: Request, ctx: Ctx) {
       .from(watchedScripts)
       .where(eq(watchedScripts.accountId, account.watchAccountId));
     const { loadOrganizerRowsFromTipState } = await import("@/lib/organizer/tipStateRows");
+    const { loadTipKnowledge } = await import("@/lib/organizer/tipHealth");
     const { aggregateAccountBalances } = await import("@/lib/catalog/balances");
     const tipRows = await loadOrganizerRowsFromTipState(db, [account.watchAccountId]);
+    const tips = await loadTipKnowledge(db);
     rows = tipRows;
     balance = aggregateAccountBalances(
       [
@@ -52,9 +54,11 @@ export async function GET(_req: Request, ctx: Ctx) {
           watchAccountId: account.watchAccountId,
           manualCoreSats: account.manualCoreSats,
           manualKnotsSats: account.manualKnotsSats,
+          synced: account.lastSyncedAt != null,
         },
       ],
-      tipRows
+      tipRows,
+      tips
     )[0];
   }
   return NextResponse.json({

@@ -61,6 +61,9 @@ describe("balances", () => {
     assert.equal(totals.coreSats, 1050n);
     assert.equal(totals.accountCount, 2);
     assert.equal(totals.bothCount, 1);
+    assert.equal(totals.coreUtxoCount, 1);
+    assert.equal(totals.knotsUtxoCount, 1);
+    assert.equal(totals.utxoCount, 1);
   });
 
   it("does not count a core-bound outpoint as replay", () => {
@@ -78,6 +81,54 @@ describe("balances", () => {
     assert.equal(account.bothCount, 0);
     assert.equal(account.knotsSats, 42n);
     assert.equal(account.coreSats, 0n);
+    assert.equal(account.coreUtxoCount, 0);
+    assert.equal(account.knotsUtxoCount, 1);
+    assert.equal(account.utxoCount, 1);
+  });
+
+  it("counts Core and Knots UTXOs separately without summing sats", () => {
+    const rows = [
+      {
+        ...annotate({
+          scriptId: 1,
+          address: "bc1qa",
+          core: { status: "unspent", valueSats: 100, txid: "aa", vout: 0 },
+          knots: { status: "absent" },
+        }),
+        accountId: 1,
+        watchAccountId: 1,
+      },
+      {
+        ...annotate({
+          scriptId: 2,
+          address: "bc1qb",
+          core: { status: "absent" },
+          knots: { status: "unspent", valueSats: 200, txid: "bb", vout: 0 },
+        }),
+        accountId: 1,
+        watchAccountId: 1,
+      },
+      {
+        ...annotate({
+          scriptId: 3,
+          address: "bc1qc",
+          core: { status: "unspent", valueSats: 300, txid: "cc", vout: 0 },
+          knots: { status: "unspent", valueSats: 300, txid: "cc", vout: 0 },
+        }),
+        accountId: 1,
+        watchAccountId: 1,
+      },
+    ];
+    const [account] = aggregateAccountBalances(
+      [{ id: 1, source: "electrum", watchAccountId: 1 }],
+      rows
+    );
+    assert.equal(account.coreSats, 400n);
+    assert.equal(account.knotsSats, 500n);
+    assert.equal(account.coreUtxoCount, 2);
+    assert.equal(account.knotsUtxoCount, 2);
+    assert.equal(account.utxoCount, 3);
+    assert.equal(account.bothCount, 1);
   });
 
   it("parses manual sats input", () => {
@@ -85,5 +136,54 @@ describe("balances", () => {
     assert.equal(parseSatsInput(""), null);
     assert.equal(parseSatsInput("1000"), 1000n);
     assert.throws(() => parseSatsInput("not-a-number"));
+  });
+
+  it("does not treat a missing Core tip as zero sats", () => {
+    const row = {
+      ...annotate({
+        scriptId: 1,
+        address: "bc1q",
+        core: { status: "absent" },
+        knots: { status: "unspent", valueSats: 900, txid: "aa", vout: 0 },
+      }),
+      accountId: 1,
+      watchAccountId: 1,
+    };
+    const [account] = aggregateAccountBalances(
+      [{ id: 1, source: "electrum", watchAccountId: 1 }],
+      [row],
+      { core: false, knots: true, coreError: "ECONNREFUSED", knotsError: null }
+    );
+    assert.equal(account.coreKnown, false);
+    assert.equal(account.knotsKnown, true);
+
+    const [fresh] = aggregateAccountBalances(
+      [{ id: 2, source: "electrum", watchAccountId: 1, synced: false }],
+      [row],
+      { core: true, knots: true, coreError: null, knotsError: null }
+    );
+    assert.equal(fresh.coreKnown, false);
+    assert.equal(fresh.knotsKnown, false);
+    const freshTotals = portfolioTotals([fresh], {
+      core: true,
+      knots: true,
+      coreError: null,
+      knotsError: null,
+    });
+    assert.equal(freshTotals.coreKnown, false);
+    assert.equal(freshTotals.knotsKnown, false);
+    assert.equal(account.coreSats, 0n);
+    assert.equal(account.knotsSats, 900n);
+    assert.equal(account.bothCount, 0);
+
+    const totals = portfolioTotals([account], {
+      core: false,
+      knots: true,
+      coreError: "ECONNREFUSED",
+      knotsError: null,
+    });
+    assert.equal(totals.coreKnown, false);
+    assert.equal(totals.knotsKnown, true);
+    assert.equal(totals.coreError, "ECONNREFUSED");
   });
 });
