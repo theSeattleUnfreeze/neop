@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 from neopd.catalog import Catalog, SendDecision, build_receipt, evaluate_send
+from neopd.protect import protect_plan, replay_status
 from neopd.config import Config, parse_flavor
 from neopd.engines import EngineClient, EngineError
 from neopd.store import StoreLayout
@@ -55,6 +56,8 @@ class NeopdService:
             "getblockchaininfo": self.getblockchaininfo,
             "listcoins": self.listcoins,
             "sendrawtransaction": self.sendrawtransaction,
+            "protectwallet": self.protectwallet,
+            "getreplaystatus": self.getreplaystatus,
             "help": self.help,
         }
 
@@ -123,6 +126,15 @@ class NeopdService:
             )
         info["flavor"] = flavor
         return info
+
+    def getreplaystatus(self, _params: JsonDict) -> Any:
+        return replay_status(self.catalog.list_coins())
+
+    def protectwallet(self, params: JsonDict) -> Any:
+        dry_run = params.get("dry_run", True)
+        if not isinstance(dry_run, bool):
+            raise RpcError(-32602, "dry_run must be a boolean")
+        return protect_plan(self.catalog.list_coins(), dry_run=dry_run)
 
     def listcoins(self, _params: JsonDict) -> Any:
         return [c.to_dict() for c in self.catalog.list_coins()]

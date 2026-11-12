@@ -66,24 +66,21 @@ Behavior:
 
 Never auto-broadcast the same raw tx to both flavors.
 
-## Protect (planned)
+## Protect
 
 ### `protectwallet`
 
-One-time (or re-protect) ceremony to partition `both` UTXOs. See [replay.md](replay.md).
+Dry-run plan for partitioning `both` coins. See [replay.md](replay.md).
 
 ```json
-{
-  "dry_run": true,
-  "chains": ["core", "knots"]
-}
+{ "dry_run": true }
 ```
 
-Returns a plan of Core-bound (OP_RETURN > 83 **RDTS garnish**) and Knots-bound (#357 when available) transactions / status. Prefer Knots-first + taint for lasting Core-only lineage; OP_RETURN-only Core passes are temporary under RDTS. Staged protect: Core garnish may run before Knots #357 is live.
+The result lists each `both` coin in Knots-then-Core order. `psbts` is empty, `broadcast` is false, and `other_flavor_affected` is false. `dry_run: false` does not build a transaction either. `neopd` does not hold keys. Sign in Shrike or Sparrow.
 
-### `getreplaystatus` (planned)
+### `getreplaystatus`
 
-Counts of `both` / protected / pending Knots pass (and related banners for new dual deposits).
+Counts of `both`, `legacy_only`, `blake2b_only`, and `pending_knots_pass`. `protected` is 0 because there is no ceremony ledger. No keys.
 
 ## Electrum (adjacent, not JSON-RPC)
 
@@ -105,6 +102,8 @@ Client pairing: Sparrow → Core Fulcrum; Shrike → Knots Electrum. See [wallet
 | `help` | Method list |
 | `listcoins` | Catalog with flavor_presence / replay_risk |
 | `sendrawtransaction` | Flavor-scoped; default-deny replay; unique-input (taint) / `allow_dual_effect` / Core OP_RETURN garnish (>83, RDTS-window) when `flavor=legacy`; Knots 0x21 unified sighash when `flavor=blake2b`; confidence receipt |
+| `protectwallet` | Dry-run Knots-then-Core plan. Does not build a PSBT or broadcast. |
+| `getreplaystatus` | Catalog counts. `protected` stays 0. |
 
 Never silent dual-broadcast.
 
