@@ -101,10 +101,6 @@ export async function replaceTipUnspent(
     }
   }
 
-  await db
-    .delete(scriptTipState)
-    .where(and(eq(scriptTipState.scriptId, scriptId), eq(scriptTipState.tip, tip)));
-
   const rows = [];
   for (const u of unspent) {
     const stamp = await stampForHeight(u.height, times);
@@ -138,10 +134,21 @@ export async function replaceTipUnspent(
       confirmedAt: at,
     });
   }
-  if (rows.length) await db.insert(scriptTipState).values(rows);
+  // Header lookups finish before the delete, and the rewrite is one transaction,
+  // so a reader never sees an empty tip and a second sync cannot insert the same outpoint in between.
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(scriptTipState)
+      .where(and(eq(scriptTipState.scriptId, scriptId), eq(scriptTipState.tip, tip)));
+    if (rows.length) await tx.insert(scriptTipState).values(rows);
+  });
 }
 
-/** Confirm height of a spend: first history tx after the funding confirm. */
+/**
+ * Confirm height of a spend only when history has exactly one other confirmed tx.
+ * Electrum history is every fund and spend on the script, so a reused address
+ * cannot tell which later tx spent this outpoint.
+ */
 export function spendHeightForOutpoint(
   history: HistoryItem[],
   fundingTxid: string
@@ -149,17 +156,14 @@ export function spendHeightForOutpoint(
   const funding = fundingTxid.toLowerCase();
   const fundingHeight =
     history.find((h) => h.tx_hash.toLowerCase() === funding)?.height ?? 0;
-  const spends = history
-    .filter(
-      (h) =>
-        h.tx_hash.toLowerCase() !== funding &&
-        h.height > 0 &&
-        (fundingHeight <= 0 || h.height >= fundingHeight)
-    )
-    .sort((a, b) => a.height - b.height);
-  // Prefer a tx strictly after the funding block when we know the funding height.
-  const after = fundingHeight > 0 ? spends.find((h) => h.height > fundingHeight) : undefined;
-  return (after ?? spends[0])?.height ?? null;
+  const candidates = history.filter(
+    (h) =>
+      h.tx_hash.toLowerCase() !== funding &&
+      h.height > 0 &&
+      (fundingHeight <= 0 || h.height >= fundingHeight)
+  );
+  if (candidates.length !== 1) return null;
+  return candidates[0].height;
 }
 
 /**

@@ -58,9 +58,9 @@ function spendBeyondUnspent(snap: ScriptTipSnapshot): boolean {
   return snap.history.some((h: HistoryItem) => !funding.has(h.tx_hash.toLowerCase()));
 }
 
-/** Rank history height so mempool (0) sorts as newest among confirmed heights. */
-function exposureRank(height: number): number {
-  if (height <= 0) return Number.MAX_SAFE_INTEGER;
+/** Rank history height so mempool (0 or missing) sorts as newest among confirmed heights. */
+export function exposureNewest(height: number | null | undefined): number {
+  if (height == null || height <= 0) return Number.MAX_SAFE_INTEGER;
   return height;
 }
 
@@ -70,7 +70,7 @@ function latestExposureOnTip(snap: ScriptTipSnapshot): WitnessExposure | null {
   let best: HistoryItem | null = null;
   for (const item of snap.history) {
     if (funding.has(item.tx_hash.toLowerCase())) continue;
-    if (!best || exposureRank(item.height) >= exposureRank(best.height)) best = item;
+    if (!best || exposureNewest(item.height) >= exposureNewest(best.height)) best = item;
   }
   if (!best) return null;
   return {
@@ -94,7 +94,7 @@ export function witnessExposureFromTips(
     .filter((e): e is WitnessExposure => e != null);
   if (!candidates.length) return null;
   return candidates.reduce((a, b) =>
-    exposureRank(b.height ?? 0) >= exposureRank(a.height ?? 0) ? b : a
+    exposureNewest(b.height) >= exposureNewest(a.height) ? b : a
   );
 }
 

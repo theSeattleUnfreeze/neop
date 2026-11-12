@@ -1,6 +1,6 @@
 "use client";
 
-import { splitSummary, type OutpointRow } from "@/lib/catalog/outpoints";
+import { exposureNewest, splitSummary, type OutpointRow } from "@/lib/catalog/outpoints";
 import {
   WitnessExposureBadge,
   type WitnessExposureInfo,
@@ -41,7 +41,7 @@ export function SplitChecklist({
   const exposures = published
     .map(exposureFromScript)
     .filter((e): e is WitnessExposureInfo => e != null)
-    .sort((a, b) => (b.height ?? 0) - (a.height ?? 0));
+    .sort((a, b) => exposureNewest(b.height) - exposureNewest(a.height));
   const latest = exposures[0] ?? null;
 
   return (
