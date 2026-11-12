@@ -135,6 +135,13 @@ export function knotsAfterCoreProblems(tx: TxLike): string[] {
   return problems;
 }
 
+/** Local checks for the chain this file was assigned to. */
+export function phaseProblems(tx: TxLike, flavor: "core" | "knots", why: string): string[] {
+  if (flavor === "core") return coreProblems(tx, { knotsAbsent: why === "knots-absent" });
+  if (why === "unified-sighash") return knotsProblems(tx);
+  return knotsAfterCoreProblems(tx);
+}
+
 export function knotsProblems(tx: TxLike): string[] {
   const problems: string[] = [];
   const inputs = inputProblem(tx);

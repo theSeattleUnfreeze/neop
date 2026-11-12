@@ -41,6 +41,10 @@ describe("batch watch", () => {
       "reorged"
     );
     assert.equal(rowStatus({ ...base, inMempool: false, confirmed: null, hashAtConfirmedHeight: null, spenders: [null] }), "missing");
+    assert.equal(
+      rowStatus({ ...base, inMempool: false, confirmed: null, hashAtConfirmedHeight: null, spenders: [], chainSpent: true }),
+      "confirmed"
+    );
   });
 
   it("reports a fee rate and newly mined ids", () => {

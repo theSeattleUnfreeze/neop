@@ -35,6 +35,8 @@ export function rowStatus(input: {
   spenders: (string | null)[];
   confirmed: ChainBlock | null;
   hashAtConfirmedHeight: string | null;
+  /** Every input is spent in a block, but this node cannot return the transaction (no txindex). */
+  chainSpent?: boolean;
 }): RowStatus {
   const foreign = input.spenders.some((id) => id !== null && id !== input.ourTxid);
   const reorged =
@@ -43,7 +45,7 @@ export function rowStatus(input: {
     input.hashAtConfirmedHeight !== input.confirmed.hash;
   if (reorged) return "reorged";
   if (foreign) return "conflict";
-  if (input.confirmed) return "confirmed";
+  if (input.confirmed || input.chainSpent) return "confirmed";
   if (input.inMempool) return "mempool";
   return "missing";
 }
