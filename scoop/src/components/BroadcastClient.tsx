@@ -203,7 +203,8 @@ export function BroadcastClient() {
       setWatchReason(json.reason ?? null);
       setWatchRows(json.rows ?? []);
       if (json.rdts?.reasons?.length) setRdts(json.rdts.reasons);
-      if (json.phase === "send-knots" && coreAccepted && !knotsSent && !knotsLock.current) {
+      const hasKnots = currentRows.some((row) => row.flavor === "knots");
+      if (json.phase === "send-knots" && hasKnots && coreAccepted && !knotsSent && !knotsLock.current) {
         knotsLock.current = true;
         void send("knots");
       }

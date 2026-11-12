@@ -164,7 +164,13 @@ export async function sendDrop(body: unknown): Promise<
     const coreCount = assembled.rows.filter((row) => row.flavor === "core").length;
     const spent = await coreSpentFlags(inspected, assembled.rows);
     if ("error" in spent) return { error: spent.error, status: 503 };
-    const step = nextWave({ coreFileCount: coreCount, coreInputsSpent: coreInputsSpent(spent), knotsSent: false });
+    const knotsCount = assembled.rows.filter((row) => row.flavor === "knots").length;
+    const step = nextWave({
+      coreFileCount: coreCount,
+      knotsFileCount: knotsCount,
+      coreInputsSpent: coreInputsSpent(spent),
+      knotsSent: false,
+    });
     if (step.phase !== "send-knots") return { error: step.reason, status: 409 };
   }
 
@@ -184,9 +190,10 @@ export async function sendDrop(body: unknown): Promise<
   let verdicts: MempoolVerdict[] = [];
   if (local.length === 0) {
     try {
-      const result = await nodeRpc(phase, "testmempoolaccept", [hexes]);
-      const rows = Array.isArray(result) ? result : [result];
-      verdicts = rows.map((row) => readMempoolAccept(row));
+      for (const hex of hexes) {
+        const result = await nodeRpc(phase, "testmempoolaccept", [[hex], 0]);
+        verdicts.push(readMempoolAccept(result));
+      }
     } catch (err) {
       return { error: scrubRpcText(err instanceof Error ? err.message : "Preflight failed."), status: 503 };
     }
@@ -268,8 +275,10 @@ export async function watchDrop(body: unknown): Promise<
   } catch (err) {
     return { error: scrubRpcText(err instanceof Error ? err.message : "Core did not answer.") };
   }
+  const knotsFileCount = named.filter((row) => row && typeof row === "object" && (row as { flavor?: unknown }).flavor === "knots").length;
   const step = nextWave({
     coreFileCount: corePoints.length,
+    knotsFileCount,
     coreInputsSpent: coreInputsSpent(flags),
     knotsSent: false,
   });
@@ -333,13 +342,14 @@ async function txStatus(
     } catch {
       confirmed = null;
     }
-    let taken = false;
+    let chainSpent = false;
     if (!inMempool && !confirmed && points.length > 0) {
       const ready = await tipReady(flavor);
+      chainSpent = ready;
       for (const point of points) {
         try {
-          const view = readTxOut(await nodeRpc(flavor, "gettxout", [point.txid, point.vout, true]));
-          if (outputGone(ready, view) === true) taken = true;
+          const view = readTxOut(await nodeRpc(flavor, "gettxout", [point.txid, point.vout, false]));
+          if (outputGone(ready, view) !== true) chainSpent = false;
         } catch {
           return "missing";
         }
@@ -348,9 +358,10 @@ async function txStatus(
     return rowStatus({
       ourTxid: txid,
       inMempool,
-      spenders: taken ? ["other"] : [],
+      spenders: [],
       confirmed,
       hashAtConfirmedHeight: hashAtHeight,
+      chainSpent,
     });
   } catch {
     return "missing";

@@ -292,6 +292,17 @@ describe("wave timing", () => {
     assert.equal(nextWave({ coreFileCount: 0, coreInputsSpent: null, knotsSent: false }).phase, "send-knots");
   });
 
+  it("finishes a Core-only wave without asking to send Knots", () => {
+    assert.equal(
+      nextWave({ coreFileCount: 2, knotsFileCount: 0, coreInputsSpent: true, knotsSent: false }).phase,
+      "done"
+    );
+    assert.equal(
+      nextWave({ coreFileCount: 2, knotsFileCount: 0, coreInputsSpent: false, knotsSent: false }).phase,
+      "hold"
+    );
+  });
+
   it("sends only the files for the requested chain", () => {
     const files = [
       file({ name: "c.psbt", flavor: "core", why: "long-op-return" }),

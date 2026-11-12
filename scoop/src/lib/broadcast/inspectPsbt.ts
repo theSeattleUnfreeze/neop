@@ -47,9 +47,14 @@ export function inputAddresses(psbt: Psbt): string[] {
   return found;
 }
 
+function inputIsFinal(psbt: Psbt): boolean {
+  return psbt.data.inputs.length > 0 && psbt.data.inputs.every((input) => input.finalScriptSig || input.finalScriptWitness);
+}
+
+/** A file that already carries final scripts must not be finalized again. bitcoinjs-lib throws when those fields are set. */
 function signedTx(psbt: Psbt): Transaction | null {
   try {
-    return psbt.finalizeAllInputs().extractTransaction();
+    return (inputIsFinal(psbt) ? psbt : psbt.finalizeAllInputs()).extractTransaction();
   } catch {
     return null;
   }

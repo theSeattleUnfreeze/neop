@@ -38,4 +38,12 @@ describe("inspect PSBT", () => {
     const seen = inspectPsbt("coin.psbt", oneCoin().toBuffer(), ["core-only"]);
     assert.equal(seen.guess.flavor, null);
   });
+
+  it("extracts a PSBT that already has final scripts", () => {
+    const psbt = oneCoin();
+    psbt.data.inputs[0].finalScriptWitness = Buffer.from("00", "hex");
+    const seen = inspectPsbt("final.psbt", psbt.toBuffer());
+    assert.ok(seen.txid);
+    assert.ok(seen.hex);
+  });
 });

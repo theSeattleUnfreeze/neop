@@ -169,6 +169,8 @@ export function coreInputsSpent(flags: (boolean | null)[]): boolean | null {
 
 export function nextWave(input: {
   coreFileCount: number;
+  /** Omit when the caller already knows a Knots file exists. Zero means this wave has nothing to send on Knots. */
+  knotsFileCount?: number;
   coreInputsSpent: boolean | null;
   knotsSent: boolean;
 }): { phase: WavePhase; reason: string } {
@@ -182,6 +184,7 @@ export function nextWave(input: {
           : "Core has not shown those inputs spent in a block. Knots stays unsent.",
     };
   }
+  if (input.knotsFileCount === 0) return { phase: "done", reason: "This wave has no Knots files." };
   return { phase: "send-knots", reason: "Core inputs are spent in a block. Knots can be sent." };
 }
 
