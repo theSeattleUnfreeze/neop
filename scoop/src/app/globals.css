@@ -148,6 +148,11 @@ a {
 .scoop-main {
   display: grid;
   gap: 1rem;
+  min-width: 0;
+}
+
+.scoop-main > * {
+  min-width: 0;
 }
 
 .scoop-panel {
@@ -299,6 +304,11 @@ a {
 .scoop-stack {
   display: grid;
   gap: 1rem;
+  min-width: 0;
+}
+
+.scoop-stack > * {
+  min-width: 0;
 }
 
 .field {
@@ -695,12 +705,41 @@ a {
 
 .coin-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .coin-table {
   width: 100%;
+  /* Fixed columns plus a readable outpoint. Narrow viewports scroll instead of crushing it. */
+  min-width: 62rem;
   border-collapse: collapse;
   font-size: 0.8rem;
+  table-layout: fixed;
+}
+
+.coin-table thead th:first-child,
+.coin-table tbody tr:not(.coin-group) td:first-child {
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.coin-table .col-received { width: 9rem; }
+.coin-table .col-core { width: 8.5rem; }
+.coin-table .col-knots { width: 11rem; }
+.coin-table .col-presence { width: 9rem; }
+.coin-table .col-flags { width: 10.5rem; }
+
+.coin-group-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+
+.coin-group-addr {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .coin-table th,
@@ -720,8 +759,8 @@ a {
   word-break: break-all;
 }
 
-.flags {
-  display: flex;
+.flag-list {
+  display: inline-flex;
   flex-wrap: wrap;
   gap: 0.35rem;
 }
@@ -1341,6 +1380,67 @@ a {
 .datacarrier-line input {
   flex: 1 1 16rem;
   min-width: 0;
+}
+
+.method-picker,
+.split-lanes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.label-drop {
+  border: 2px dashed var(--scoop-border);
+  padding: 0.75rem;
+}
+
+.split-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.split-table th,
+.split-table td {
+  border-bottom: 1px solid var(--scoop-border);
+  text-align: left;
+  vertical-align: top;
+  padding: 0.4rem;
+}
+
+.split-table input {
+  width: 100%;
+}
+
+.confirm-gauge {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.confirm-ring {
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--scoop-core) calc(var(--turn) * 1turn), var(--scoop-border) 0);
+}
+
+.confirm-ring span {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--scoop-panel);
+}
+
+.confirm-gauge.alert .confirm-ring {
+  background: conic-gradient(var(--scoop-knots) calc(var(--turn) * 1turn), var(--scoop-border) 0);
+}
+
+.split-watch {
+  margin: 0.8rem 0;
 }
 
 @media (max-width: 800px) {

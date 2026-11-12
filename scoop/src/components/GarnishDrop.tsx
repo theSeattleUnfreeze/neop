@@ -168,6 +168,8 @@ export function GarnishDrop() {
         <h2>Core garnish</h2>
         <p className="muted">
           <Link href="/howto/garnish">Walkthrough: garnish Core PSBTs</Link>
+          {" · "}
+          <Link href="/split">Start from the coins that need a split</Link>
         </p>
         <p>
           Drop unsigned Core PSBTs from Sparrow, one coin in each. Scoop adds an OP_RETURN whose

@@ -255,6 +255,17 @@ export function DashboardClient() {
           </p>
         ) : null}
         {error ? <p className="banner bad">{error}</p> : null}
+        {dash && dash.portfolio.coreKnown !== false && dash.portfolio.knotsKnown !== false && dash.portfolio.accountCount === 0 ? (
+          <p>
+            The stack can see both chains. <Link href="/wallets">Add a wallet</Link> to watch coins.
+          </p>
+        ) : null}
+        {dash && dash.portfolio.coreKnown !== false && dash.portfolio.knotsKnown !== false && dash.portfolio.bothCount > 0 ? (
+          <p className="banner warn">
+            {dash.portfolio.bothCount} {dash.portfolio.bothCount === 1 ? "coin is" : "coins are"} still on both chains.{" "}
+            <Link href="/split">Split them</Link>
+          </p>
+        ) : null}
         {dash && (dash.portfolio.coreKnown === false || dash.portfolio.knotsKnown === false) ? (
           <p className="banner warn">
             {dash.portfolio.coreKnown === false && dash.portfolio.knotsKnown === false

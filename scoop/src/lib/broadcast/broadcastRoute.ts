@@ -9,15 +9,24 @@ import { inspectBase64, type InspectedPsbt } from "@/lib/broadcast/inspectPsbt";
 import { nodeRpc, scrubRpcText } from "@/lib/broadcast/nodeRpc";
 import {
   assemblePreview,
+  assignFlavor,
   coreInputsSpent,
   filesForPhase,
   maySendWave1,
-  nextWave,
   rdtsWarning,
   sendStoppedReason,
   type Flavor,
   type PreviewRow,
+  type SignedFile,
 } from "@/lib/broadcast/pairWave";
+import {
+  coversQueue,
+  methodNeedText,
+  nextWaveForMethod,
+  pairWaveForMethod,
+  parseSplitMethod,
+  type SplitMethod,
+} from "@/lib/split/method";
 import {
   chainTipReady,
   mayBroadcast,
@@ -62,6 +71,44 @@ function phaseOf(body: unknown): Flavor | null {
   return phase === "core" || phase === "knots" ? phase : null;
 }
 
+function methodOf(body: unknown): SplitMethod | null | { error: string } {
+  if (!body || typeof body !== "object" || !("method" in body)) return null;
+  return parseSplitMethod((body as { method?: unknown }).method);
+}
+
+function readQueue(body: unknown): string[] | null | { error: string } {
+  if (!body || typeof body !== "object" || !("queue" in body) || (body as { queue?: unknown }).queue == null) {
+    return null;
+  }
+  const queue = (body as { queue?: unknown }).queue;
+  if (!Array.isArray(queue)) return { error: "The coin list was missing." };
+  const out: string[] = [];
+  for (const item of queue) {
+    if (typeof item !== "string" || !/^[0-9a-fA-F]{64}:[0-9]+$/.test(item)) {
+      return { error: "The coin list was missing." };
+    }
+    out.push(item.toLowerCase());
+  }
+  return out;
+}
+
+function signedFrom(
+  inspected: InspectedPsbt[],
+  catalog: Record<string, import("@/lib/broadcast/pairWave").CoinNeed>
+): SignedFile[] {
+  return inspected.map((file) => {
+    const needs = file.outpoints.map((point) => catalog[point] ?? "unknown");
+    const assigned = assignFlavor(file.guess, needs);
+    return {
+      name: file.name,
+      flavor: assigned.flavor,
+      why: assigned.why,
+      inputCount: file.inputCount,
+      outpoints: file.outpoints,
+    };
+  });
+}
+
 async function rdts(): Promise<{ warn: boolean; reasons: string[] }> {
   let median: number | null = null;
   try {
@@ -83,7 +130,10 @@ function inspectedRows(files: DroppedFile[]): InspectedPsbt[] | { error: string 
   }
 }
 
-export async function previewDrop(files: DroppedFile[]): Promise<
+export async function previewDrop(
+  files: DroppedFile[],
+  options?: { method?: SplitMethod | null; queue?: string[] | null }
+): Promise<
   | { rows: PreviewRow[]; problems: string[]; pairOk: boolean; rdts: { warn: boolean; reasons: string[] } }
   | { error: string }
 > {
@@ -105,10 +155,23 @@ export async function previewDrop(files: DroppedFile[]): Promise<
     })),
     catalog
   );
+  const method = options?.method ?? null;
+  const signed = signedFrom(inspected, catalog);
+  const paired = method ? pairWaveForMethod(signed, catalog, method) : { ok: view.pairOk, problems: view.problems };
+  const problems = paired.problems.map((problem) => problem.message);
+  if (method && options?.queue) {
+    const cover = coversQueue(method, options.queue, signed);
+    for (const problem of cover.problems) problems.push(problem.message);
+    paired.ok = paired.ok && cover.ok;
+  }
+  const rows = view.rows.map((row) => {
+    const text = method ? methodNeedText(method, row.need) : null;
+    return text ? { ...row, needText: text } : row;
+  });
   return {
-    rows: view.rows,
-    problems: view.problems.map((problem) => problem.message),
-    pairOk: view.pairOk,
+    rows,
+    problems,
+    pairOk: paired.ok,
     rdts: await rdts(),
   };
 }
@@ -131,7 +194,14 @@ export async function sendDrop(body: unknown): Promise<
   if ("error" in files) return { error: files.error, status: 400 };
   const phase = phaseOf(body);
   if (!phase) return { error: "Say whether this is the Core wave or the Knots wave.", status: 400 };
-  const preview = await previewDrop(files);
+  const method = methodOf(body);
+  if (method && typeof method === "object") return { error: method.error, status: 400 };
+  const queue = readQueue(body);
+  if (queue && !Array.isArray(queue)) return { error: queue.error, status: 400 };
+  if (method === "core-garnish" && phase === "knots") {
+    return { error: "This method does not send a Knots wave.", status: 400 };
+  }
+  const preview = await previewDrop(files, { method, queue });
   if ("error" in preview) return { error: preview.error, status: 503 };
   const checked = new Set(checkedNames(body));
   const gate = maySendWave1({
@@ -165,7 +235,7 @@ export async function sendDrop(body: unknown): Promise<
     const spent = await coreSpentFlags(inspected, assembled.rows);
     if ("error" in spent) return { error: spent.error, status: 503 };
     const knotsCount = assembled.rows.filter((row) => row.flavor === "knots").length;
-    const step = nextWave({
+    const step = nextWaveForMethod(method, {
       coreFileCount: coreCount,
       knotsFileCount: knotsCount,
       coreInputsSpent: coreInputsSpent(spent),
@@ -244,7 +314,7 @@ export async function watchDrop(body: unknown): Promise<
   | {
       phase: string;
       reason: string;
-      rows: { name: string; status: RowStatus }[];
+      rows: { name: string; status: RowStatus; confirmations: number }[];
       rdts: { warn: boolean; reasons: string[] };
     }
   | { error: string }
@@ -276,13 +346,14 @@ export async function watchDrop(body: unknown): Promise<
     return { error: scrubRpcText(err instanceof Error ? err.message : "Core did not answer.") };
   }
   const knotsFileCount = named.filter((row) => row && typeof row === "object" && (row as { flavor?: unknown }).flavor === "knots").length;
-  const step = nextWave({
+  const method = methodOf(body);
+  const step = nextWaveForMethod(method && typeof method === "object" ? null : method, {
     coreFileCount: corePoints.length,
     knotsFileCount,
     coreInputsSpent: coreInputsSpent(flags),
     knotsSent: false,
   });
-  const statuses: { name: string; status: RowStatus }[] = [];
+  const statuses: { name: string; status: RowStatus; confirmations: number }[] = [];
   for (const row of named) {
     if (!row || typeof row !== "object") continue;
     const name = (row as { name?: unknown }).name;
@@ -299,7 +370,8 @@ export async function watchDrop(body: unknown): Promise<
         return { txid: id, vout };
       })
       .filter((point): point is { txid: string; vout: number } => point !== null);
-    statuses.push({ name, status: await txStatus(flavor, txid, rowPoints) });
+    const found = await txStatus(flavor, txid, rowPoints);
+    statuses.push({ name, status: found.status, confirmations: found.confirmations });
   }
   return { phase: step.phase, reason: step.reason, rows: statuses, rdts: await rdts() };
 }
@@ -308,7 +380,7 @@ async function txStatus(
   flavor: Flavor,
   txid: string,
   points: { txid: string; vout: number }[]
-): Promise<RowStatus> {
+): Promise<{ status: RowStatus; confirmations: number }> {
   try {
     let inMempool = false;
     try {
@@ -319,9 +391,12 @@ async function txStatus(
     }
     let confirmed: { height: number; hash: string } | null = null;
     let hashAtHeight: string | null = null;
+    let confirmations = 0;
     try {
       const raw = await nodeRpc(flavor, "getrawtransaction", [txid, true]);
       if (raw && typeof raw === "object") {
+        const reported = (raw as { confirmations?: unknown }).confirmations;
+        if (typeof reported === "number" && reported > 0) confirmations = Math.floor(reported);
         const blockhash = (raw as { blockhash?: unknown }).blockhash;
         if (typeof blockhash === "string") {
           confirmed = { height: 0, hash: blockhash };
@@ -351,11 +426,11 @@ async function txStatus(
           const view = readTxOut(await nodeRpc(flavor, "gettxout", [point.txid, point.vout, false]));
           if (outputGone(ready, view) !== true) chainSpent = false;
         } catch {
-          return "missing";
+          return { status: "missing", confirmations: 0 };
         }
       }
     }
-    return rowStatus({
+    const status = rowStatus({
       ourTxid: txid,
       inMempool,
       spenders: [],
@@ -363,7 +438,8 @@ async function txStatus(
       hashAtConfirmedHeight: hashAtHeight,
       chainSpent,
     });
+    return { status, confirmations: status === "confirmed" ? confirmations : 0 };
   } catch {
-    return "missing";
+    return { status: "missing", confirmations: 0 };
   }
 }
