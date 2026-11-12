@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { SyncMeter } from "@/components/SyncMeter";
+import { syncView } from "@/lib/stack/syncView";
 import type { StackService, StackServiceId, StackStatusRow } from "@/lib/stack/types";
 
 export const STACK_FIELDS: Record<
@@ -27,8 +29,12 @@ export const STACK_FIELDS: Record<
     { key: "endpoint", label: "LAN RPC URL" },
     { key: "rpcUser", label: "RPC user" },
     { key: "rpcPassword", label: "RPC password", secret: true },
+    { key: "remoteStart", label: "Start command (startup script)" },
   ],
-  "knots-fulcrum": [{ key: "endpoint", label: "Electrum URL" }],
+  "knots-fulcrum": [
+    { key: "endpoint", label: "Electrum URL" },
+    { key: "remoteStart", label: "Start command (startup script)" },
+  ],
   "knots-link": [
     { key: "endpoint", label: "Local RPC URL" },
     { key: "startosHost", label: "StartOS host" },
@@ -41,6 +47,8 @@ export const STACK_FIELDS: Record<
 type Props = {
   svc: StackService;
   row?: StackStatusRow;
+  /** Paired node, so a Fulcrum editor can draw catch-up against that node’s blocks. */
+  nodeRow?: StackStatusRow;
   statusPending: boolean;
   busy: boolean;
   mode?: "page" | "dialog";
@@ -54,6 +62,7 @@ type Props = {
 export function StackServiceEditor({
   svc,
   row,
+  nodeRow,
   statusPending,
   busy,
   mode = "page",
@@ -84,6 +93,9 @@ export function StackServiceEditor({
     document.getElementById("datacarrier")?.scrollIntoView({ block: "nearest" });
   }, [svc.id, mode]);
 
+  const sync = row ? syncView(row, nodeRow) : null;
+  const tone = svc.id.startsWith("knots") ? "knots" : "core";
+
   const body = (
     <section className={`scoop-panel stack-service-editor${mode === "dialog" ? " is-dialog" : ""}`}>
       <div className="section-head">
@@ -104,7 +116,7 @@ export function StackServiceEditor({
               </button>
             </>
           ) : (
-            <span className="muted">Observed</span>
+            <span className="muted">Watched from here</span>
           )}
           {mode === "dialog" ? (
             <button type="button" className="scoop-btn ghost" ref={closeRef} onClick={onClose}>
@@ -114,6 +126,13 @@ export function StackServiceEditor({
         </span>
       </div>
       {row?.detail ? <p className="muted">{row.detail}</p> : statusPending ? <p className="muted">Checking…</p> : null}
+      {sync ? <SyncMeter label={sync.label} ratio={sync.ratio} tone={tone} /> : null}
+      {svc.control === "remote" ? (
+        <p className="muted">
+          This page watches the service. <span className="mono">scoop.cmd</span> runs the start
+          command on this PC. That line can be <span className="mono">ssh</span>.
+        </p>
+      ) : null}
       {svc.id === "core-node" ? (
         <div id={mode === "dialog" ? "datacarrier" : undefined} className="banner warn">
           <p>

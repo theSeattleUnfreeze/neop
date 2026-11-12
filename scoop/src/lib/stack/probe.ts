@@ -25,33 +25,39 @@ async function readCookie(cookieFile: string): Promise<{ user: string; password:
 
 type RpcBody = { result?: RpcInfo; error?: { message?: string } };
 
+function clampProgress(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
+
 export function rpcProbeFromHttp(
   status: number,
   body: RpcBody | null
-): Pick<StackStatusRow, "state" | "height" | "headers" | "detail"> {
+): Pick<StackStatusRow, "state" | "height" | "headers" | "progress" | "detail"> {
   if (status === 401) {
     return {
       state: "up",
       height: null,
       headers: null,
+      progress: null,
       detail: "RPC is there; credentials were not accepted.",
     };
   }
   if (status < 200 || status >= 300 || !body || body.error || !body.result) {
     const message = body?.error?.message || `HTTP ${status}`;
-    return { state: "down", height: null, headers: null, detail: message };
+    return { state: "down", height: null, headers: null, progress: null, detail: message };
   }
   const info = body.result;
   const ibd = info.initialblockdownload ? " still syncing" : "";
-  const progress =
-    typeof info.verificationprogress === "number"
-      ? ` (${Math.min(100, info.verificationprogress * 100).toFixed(1)}%)`
-      : "";
+  const fraction =
+    typeof info.verificationprogress === "number" ? clampProgress(info.verificationprogress) : null;
+  const progressText = fraction != null ? ` (${(fraction * 100).toFixed(1)}%)` : "";
   return {
     state: "up",
     height: typeof info.blocks === "number" ? info.blocks : null,
     headers: typeof info.headers === "number" ? info.headers : null,
-    detail: `RPC answering${ibd}${progress}`,
+    progress: fraction,
+    detail: `RPC answering${ibd}${progressText}`,
   };
 }
 
@@ -121,7 +127,7 @@ export function selectRpcAttempt(attempts: RpcAttempt[]): RpcAttempt | null {
 
 function rpcFromResponse(res: { status: number; text: string }): Pick<
   StackStatusRow,
-  "state" | "height" | "headers" | "detail"
+  "state" | "height" | "headers" | "progress" | "detail"
 > {
   if (res.status === 401) return rpcProbeFromHttp(401, null);
   let parsed: RpcBody | null = null;
@@ -133,9 +139,9 @@ function rpcFromResponse(res: { status: number; text: string }): Pick<
   return rpcProbeFromHttp(res.status, parsed);
 }
 
-async function probeRpc(svc: StackService): Promise<Pick<StackStatusRow, "state" | "height" | "headers" | "detail">> {
+async function probeRpc(svc: StackService): Promise<Pick<StackStatusRow, "state" | "height" | "headers" | "progress" | "detail">> {
   if (!svc.endpoint) {
-    return { state: "unset", height: null, headers: null, detail: "No RPC URL yet." };
+    return { state: "unset", height: null, headers: null, progress: null, detail: "No RPC URL yet." };
   }
   const headers: Record<string, string> = { "content-type": "text/plain" };
   const authorization = await rpcAuthorization(svc);
@@ -182,10 +188,11 @@ async function probeRpc(svc: StackService): Promise<Pick<StackStatusRow, "state"
       state: "down",
       height: null,
       headers: null,
+      progress: null,
       detail: "Port is open; RPC timed out (node may be syncing).",
     };
   }
-  return { state: "down", height: null, headers: null, detail: error };
+  return { state: "down", height: null, headers: null, progress: null, detail: error };
 }
 
 function endpointTcpOpen(endpoint: string): Promise<boolean> {
@@ -226,9 +233,9 @@ function endpointTcpOpen(endpoint: string): Promise<boolean> {
 
 async function probeElectrum(
   svc: StackService
-): Promise<Pick<StackStatusRow, "state" | "height" | "headers" | "detail">> {
+): Promise<Pick<StackStatusRow, "state" | "height" | "headers" | "progress" | "detail">> {
   if (!svc.endpoint) {
-    return { state: "unset", height: null, headers: null, detail: "No Electrum URL yet." };
+    return { state: "unset", height: null, headers: null, progress: null, detail: "No Electrum URL yet." };
   }
   const client = ElectrumClient.fromUrl(svc.endpoint);
   try {
@@ -241,6 +248,7 @@ async function probeElectrum(
       state: "up",
       height,
       headers: height,
+      progress: null,
       detail: height != null ? `${banner} tip ${height.toLocaleString()}` : banner,
     };
   } catch (err) {
@@ -250,6 +258,7 @@ async function probeElectrum(
       state: "down",
       height: null,
       headers: null,
+      progress: null,
       detail: open ? "Port is open; Electrum timed out (often waiting on bitcoind)." : message,
     };
   } finally {
@@ -259,17 +268,18 @@ async function probeElectrum(
 
 async function probeLink(
   svc: StackService
-): Promise<Pick<StackStatusRow, "state" | "height" | "headers" | "detail">> {
+): Promise<Pick<StackStatusRow, "state" | "height" | "headers" | "progress" | "detail">> {
   if (!svc.endpoint) {
-    return { state: "unset", height: null, headers: null, detail: "No tunnel RPC URL yet." };
+    return { state: "unset", height: null, headers: null, progress: null, detail: "No tunnel RPC URL yet." };
   }
   return probeRpc(svc);
 }
 
-const TIMED_OUT: Pick<StackStatusRow, "state" | "height" | "headers" | "detail"> = {
+const TIMED_OUT: Pick<StackStatusRow, "state" | "height" | "headers" | "progress" | "detail"> = {
   state: "down",
   height: null,
   headers: null,
+  progress: null,
   detail: "Timed out.",
 };
 

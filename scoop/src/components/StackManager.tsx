@@ -33,8 +33,8 @@ export function StackManager() {
     setDiagnoses(json.diagnoses ?? []);
   }, []);
 
-  const loadStatus = useCallback(async () => {
-    setStatusPending(true);
+  const loadStatus = useCallback(async (quiet = false) => {
+    if (!quiet) setStatusPending(true);
     try {
       const statusRes = await fetch("/api/stack/status", { cache: "no-store", headers: LOCAL });
       const statusJson = await statusRes.json();
@@ -43,13 +43,17 @@ export function StackManager() {
       setSummary(statusJson.summary ?? "");
       void loadDiagnose().catch(() => undefined);
     } finally {
-      setStatusPending(false);
+      if (!quiet) setStatusPending(false);
     }
   }, [loadDiagnose]);
 
   useEffect(() => {
     void loadConfig().catch((err) => setError(err instanceof Error ? err.message : String(err)));
     void loadStatus().catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    const timer = setInterval(() => {
+      void loadStatus(true).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    }, 15_000);
+    return () => clearInterval(timer);
   }, [loadConfig, loadStatus]);
 
   useEffect(() => {
@@ -157,6 +161,11 @@ export function StackManager() {
         <div className="section-head">
           <h2>Stack</h2>
         </div>
+        <p className="muted">
+          Start on this page asks the Scoop process on this PC to launch Core, Core Fulcrum, or the
+          local tunnel. The browser does not run those programs, and this page does not open SSH.
+          A remote start command is saved here and run by <span className="mono">scoop.cmd</span>.
+        </p>
         {summary ? <p className="banner warn">{summary}</p> : statusPending ? <p className="muted">Checking services…</p> : null}
         {notice ? <p className="banner ok">{notice}</p> : null}
         {error ? <p className="banner bad">{error}</p> : null}
@@ -226,6 +235,7 @@ export function StackManager() {
             key={svc.id}
             svc={svc}
             row={rows.find((item) => item.id === svc.id)}
+            nodeRow={rows.find((item) => item.id === (svc.id.startsWith("knots") ? "knots-node" : "core-node"))}
             statusPending={statusPending}
             busy={busy}
             onPatch={(key, value) => patch(svc.id, key, value)}
@@ -240,6 +250,7 @@ export function StackManager() {
           key={focused.id}
           svc={focused}
           row={rows.find((item) => item.id === focused.id)}
+          nodeRow={rows.find((item) => item.id === (focused.id.startsWith("knots") ? "knots-node" : "core-node"))}
           statusPending={statusPending}
           busy={busy}
           mode="dialog"

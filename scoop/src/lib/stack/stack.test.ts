@@ -21,6 +21,7 @@ function row(partial: Partial<StackStatusRow> & Pick<StackStatusRow, "id" | "sta
     endpoint: "",
     height: null,
     headers: null,
+    progress: null,
     detail: "",
     configFile: "",
     datadir: "",
@@ -67,7 +68,18 @@ describe("rpc probe", () => {
     const row = rpcProbeFromHttp(401, null);
     assert.equal(row.state, "up");
     assert.equal(row.height, null);
+    assert.equal(row.progress, null);
     assert.match(row.detail, /credentials/);
+  });
+
+  it("keeps block height and verification progress while the node syncs", () => {
+    const row = rpcProbeFromHttp(200, {
+      result: { blocks: 100, headers: 400, initialblockdownload: true, verificationprogress: 0.25 },
+    });
+    assert.equal(row.height, 100);
+    assert.equal(row.headers, 400);
+    assert.equal(row.progress, 0.25);
+    assert.match(row.detail, /syncing/);
   });
 
   it("prefers a successful RPC answer over a parallel 401", () => {
