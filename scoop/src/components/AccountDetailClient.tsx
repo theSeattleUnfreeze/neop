@@ -77,6 +77,8 @@ export function AccountDetailClient({ id }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const syncInFlight = useRef(false);
   const accountSource = useRef<Account["source"] | null>(null);
+  const routeId = useRef(id);
+  routeId.current = id;
   /** Unsaved name, notes, reminder, or estimates. Background reload must not clobber these. */
   const draftDirty = useRef(false);
   /** False after a sync error. The 10s poll stays quiet until Sync now succeeds. */
@@ -93,11 +95,12 @@ export function AccountDetailClient({ id }: Props) {
     explorers?: ExplorerBases;
   }) => {
     if (json.account) {
+      if (json.account.id !== routeId.current) return;
       accountSource.current = json.account.source;
       if (json.account.source === "electrum" && watchOk.current) setWatching(true);
       const incoming = json.account;
       setAccount((prev) => {
-        if (!prev || !draftDirty.current) return incoming;
+        if (!prev || prev.id !== incoming.id || !draftDirty.current) return incoming;
         return {
           ...incoming,
           label: prev.label,
@@ -192,6 +195,7 @@ export function AccountDetailClient({ id }: Props) {
   );
 
   useEffect(() => {
+    draftDirty.current = false;
     let cancelled = false;
     let timer: ReturnType<typeof setInterval> | null = null;
 

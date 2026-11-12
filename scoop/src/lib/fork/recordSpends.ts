@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { ScoopDb } from "@/lib/db/client";
 import { scriptTipState, spendEvents, spendOutputs } from "@/lib/db/schema";
 import { decodeTransaction } from "@/lib/fork/decodeTx";
@@ -21,6 +21,18 @@ function satsToBigint(value: number | null): bigint | null {
   return BigInt(Math.trunc(value));
 }
 
+/** What to do when a prevout already has a stored spend. */
+export function spendWritePlan(
+  prior: { txid: string; outputCount: number } | undefined,
+  nextTxid: string,
+  nextOutputCount: number
+): "insert" | "replace" | "backfill" | "skip" {
+  if (!prior) return "insert";
+  if (prior.txid.toLowerCase() !== nextTxid.toLowerCase()) return "replace";
+  if (prior.outputCount === 0 && nextOutputCount > 0) return "backfill";
+  return "skip";
+}
+
 /**
  * Resolve spends of one watched script on one tip and store any that are new.
  * Returns prev-outpoint → spend txid, including rows already stored.
@@ -40,11 +52,27 @@ export async function recordScriptSpends(args: {
     .from(spendEvents)
     .where(and(eq(spendEvents.scriptId, args.scriptId), eq(spendEvents.tip, args.tip)));
 
+  const outputIds = existing.length
+    ? await args.db
+        .select({ spendEventId: spendOutputs.spendEventId })
+        .from(spendOutputs)
+        .where(inArray(spendOutputs.spendEventId, existing.map((row) => row.id)))
+    : [];
+  const eventsWithOutputs = new Set(outputIds.map((row) => row.spendEventId));
+
   const resolved = new Map<string, string>();
   const knownSpendTxids = new Set<string>();
   const knownPrevTxids = new Set<string>();
+  const byPrev = new Map<string, (typeof existing)[number]>();
+  let missingOutputs = 0;
   for (const row of existing) {
-    resolved.set(outpointKey(row.prevTxid, row.prevVout), row.txid.toLowerCase());
+    const key = outpointKey(row.prevTxid, row.prevVout);
+    resolved.set(key, row.txid.toLowerCase());
+    byPrev.set(key, row);
+    if (!eventsWithOutputs.has(row.id)) {
+      missingOutputs += 1;
+      continue;
+    }
     knownSpendTxids.add(row.txid.toLowerCase());
     knownPrevTxids.add(row.prevTxid.toLowerCase());
   }
@@ -77,7 +105,7 @@ export async function recordScriptSpends(args: {
     unspent: args.unspent,
     knownSpendTxids,
     knownPrevTxids,
-    unresolvedSpent,
+    unresolvedSpent: unresolvedSpent + missingOutputs,
   });
   if (!txids.length) return resolved;
 
@@ -105,33 +133,49 @@ export async function recordScriptSpends(args: {
 
   for (const spend of found) {
     const key = outpointKey(spend.prevTxid, spend.prevVout);
-    if (resolved.has(key)) continue;
+    const prior = byPrev.get(key);
+    const outputCount = prior && eventsWithOutputs.has(prior.id) ? 1 : 0;
+    const plan = spendWritePlan(
+      prior ? { txid: prior.txid, outputCount } : undefined,
+      spend.spendTxid,
+      spend.outputs.length
+    );
+    if (plan === "skip") continue;
+    const outputValues = spend.outputs.map((output) => ({
+      vout: output.vout,
+      valueSats: satsToBigint(output.valueSats) ?? 0n,
+      address: output.address,
+      scriptLabel: output.scriptLabel,
+    }));
     try {
-      const inserted = await args.db
-        .insert(spendEvents)
-        .values({
-          scriptId: args.scriptId,
-          tip: args.tip,
-          txid: spend.spendTxid,
-          prevTxid: spend.prevTxid,
-          prevVout: spend.prevVout,
-          valueSats: satsToBigint(spend.valueSats),
-        })
-        .returning({ id: spendEvents.id });
-      const spendEventId = inserted[0]?.id;
-      if (spendEventId == null) continue;
-      if (spend.outputs.length) {
+      if (plan === "backfill" && prior) {
         await args.db.insert(spendOutputs).values(
-          spend.outputs.map((output) => ({
-            spendEventId,
-            vout: output.vout,
-            valueSats: satsToBigint(output.valueSats) ?? 0n,
-            address: output.address,
-            scriptLabel: output.scriptLabel,
-          }))
+          outputValues.map((output) => ({ ...output, spendEventId: prior.id }))
         );
+        eventsWithOutputs.add(prior.id);
+        resolved.set(key, prior.txid.toLowerCase());
+        continue;
       }
-      resolved.set(key, spend.spendTxid);
+      await args.db.transaction(async (tx) => {
+        if (prior) await tx.delete(spendEvents).where(eq(spendEvents.id, prior.id));
+        const inserted = await tx
+          .insert(spendEvents)
+          .values({
+            scriptId: args.scriptId,
+            tip: args.tip,
+            txid: spend.spendTxid,
+            prevTxid: spend.prevTxid,
+            prevVout: spend.prevVout,
+            valueSats: satsToBigint(spend.valueSats),
+          })
+          .returning({ id: spendEvents.id });
+        const spendEventId = inserted[0]?.id;
+        if (spendEventId == null || outputValues.length === 0) return;
+        await tx.insert(spendOutputs).values(
+          outputValues.map((output) => ({ ...output, spendEventId }))
+        );
+      });
+      resolved.set(key, spend.spendTxid.toLowerCase());
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
     }
