@@ -37,20 +37,35 @@ const TABLE = {
 
 const INSERT_ORDER: SnapshotTable[] = [...SNAPSHOT_TABLES];
 
-export async function exportSnapshot(db: ScoopDb): Promise<ScoopSnapshot> {
-  const tables = emptyTables();
-  for (const name of INSERT_ORDER) {
-    const rows = await db.select().from(TABLE[name]);
-    tables[name] = rows.map((row) => jsonSafe(row)) as unknown[];
-  }
-  return {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    tables,
-  };
+/** Stay under Postgres' 65535 bind-parameter cap, with room for the statement itself. */
+export const MAX_INSERT_BINDS = 60_000;
+
+export function rowChunks<T extends Record<string, unknown>>(rows: T[], maxBinds = MAX_INSERT_BINDS): T[][] {
+  if (!rows.length) return [];
+  const columns = rows.reduce((count, row) => Math.max(count, Object.keys(row).length), 1);
+  const size = Math.max(1, Math.floor(maxBinds / columns));
+  const chunks: T[][] = [];
+  for (let i = 0; i < rows.length; i += size) chunks.push(rows.slice(i, i + size));
+  return chunks;
 }
 
-async function resetSequences(db: ScoopDb): Promise<void> {
+export async function exportSnapshot(db: ScoopDb): Promise<ScoopSnapshot> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
+    const tables = emptyTables();
+    for (const name of INSERT_ORDER) {
+      const rows = await tx.select().from(TABLE[name]);
+      tables[name] = rows.map((row) => jsonSafe(row)) as unknown[];
+    }
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      tables,
+    };
+  });
+}
+
+async function resetSequences(db: { execute: ScoopDb["execute"] }): Promise<void> {
   const names = [
     "watched_accounts",
     "watched_scripts",
@@ -92,10 +107,11 @@ export async function importSnapshot(db: ScoopDb, snapshot: ScoopSnapshot): Prom
       const rows = (jsonRevive(parsed.tables[name]) as Record<string, unknown>[]).filter(
         (row) => row && typeof row === "object"
       );
-      if (!rows.length) continue;
-      await tx.insert(TABLE[name]).values(rows as never);
+      for (const chunk of rowChunks(rows)) {
+        await tx.insert(TABLE[name]).values(chunk as never);
+      }
     }
+    await resetSequences(tx);
   });
-  await resetSequences(db);
   return { wallets: parsed.tables.organizerAccounts.length };
 }
