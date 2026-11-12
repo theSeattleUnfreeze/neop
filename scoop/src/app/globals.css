@@ -282,6 +282,10 @@ a {
   margin-top: 1rem;
 }
 
+.stack-path {
+  overflow-wrap: anywhere;
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -1324,6 +1328,19 @@ a {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+.datacarrier-line {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin: 0.4rem 0 0.8rem;
+}
+
+.datacarrier-line input {
+  flex: 1 1 16rem;
+  min-width: 0;
 }
 
 @media (max-width: 800px) {
