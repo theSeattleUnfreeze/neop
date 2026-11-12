@@ -74,7 +74,7 @@ Error when unresolved: `replay_risk_unresolved`.
 | Unique-input (taint) acceptance | Wired (`evaluate_send`) |
 | Core OP_RETURN garnish detection (scriptPubKey > 83) on `flavor=legacy` | Wired (`neopd.wedges` → `evaluate_send`) — **RDTS-window tooling** |
 | Knots #357 sighash wedge detection (`SIGHASH_ALL|UNIFIED` / 0x21 on Taproot key-path witness) | Wired (`neopd.wedges.has_knots_bound_unified_sighash` → `evaluate_send`) when tip enforces it |
-| `protectwallet` / `getreplaystatus` | Wired — dry-run plan always; unsigned PSBTs via engine `createpsbt` when `dry_run=false` |
+| `protectwallet` / `getreplaystatus` | Wired as a dry-run plan and counts. `neopd` does not build or sign PSBTs, and it does not broadcast. |
 
 Core-bound ceremony txs with an embedded OP_RETURN garnish may go through `neopd sendrawtransaction` when `flavor=legacy` and `inputs` are catalogued (**temporary** under RDTS). Knots-bound txs with a 0x21 key-path signature may go through `flavor=blake2b`. Sign in Sparrow (Core) or Shrike (Knots); Scoop never holds keys.
 
@@ -97,8 +97,8 @@ See [rpc.md](rpc.md):
 
 - `listcoins` — presence + `replay_risk`
 - `send` / `sendrawtransaction` — chain-scoped + deny rules above
-- `protectwallet` — `{ dry_run?, chains: ["core","knots"], items?, core_payee?, knots_payee? }` → plan / unsigned PSBTs
-- `getreplaystatus` — counts of `both` / protected / pending Knots pass
+- `protectwallet` — `{ dry_run? }` → a Knots-then-Core plan for `both` coins. `psbts` is empty. Nothing is broadcast.
+- `getreplaystatus` — counts of `both`, `legacy_only`, `blake2b_only`, and `pending_knots_pass`. `protected` stays 0 until a ceremony ledger exists.
 
 ## Related docs
 
