@@ -54,6 +54,7 @@ export async function GET(_req: Request, ctx: Ctx) {
           watchAccountId: account.watchAccountId,
           manualCoreSats: account.manualCoreSats,
           manualKnotsSats: account.manualKnotsSats,
+          synced: account.lastSyncedAt != null,
         },
       ],
       tipRows,

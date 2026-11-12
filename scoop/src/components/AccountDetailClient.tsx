@@ -79,10 +79,12 @@ export function AccountDetailClient({ id }: Props) {
       });
       if (json.rows) setRows(json.rows);
       if (json.balance) setBalance(json.balance);
-      const n = (json.newNotifications ?? []).length;
-      setSyncMsg(
-        n ? `Synced. ${n} replay alert${n === 1 ? "" : "s"}.` : "Synced."
-      );
+      if (json.pending) {
+        setSyncMsg("Sync did not finish. Balances stay unknown until Electrum answers.");
+      } else {
+        const n = (json.newNotifications ?? []).length;
+        setSyncMsg(n ? `Synced. ${n} replay alert${n === 1 ? "" : "s"}.` : "Synced.");
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

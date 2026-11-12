@@ -66,11 +66,11 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
       ? await fetchScriptTip("knots", urls.shulcrum, s.electrumScripthash)
       : undefined;
     if (core) {
-      coreOk = core.ok;
+      coreOk = coreOk === false ? false : core.ok;
       if (!core.ok) coreError = core.error ?? "fulcrum error";
     }
     if (knots) {
-      knotsOk = knots.ok;
+      knotsOk = knotsOk === false ? false : knots.ok;
       if (!knots.ok) knotsError = knots.error ?? "shulcrum error";
     }
     if (core?.ok || knots?.ok) tipAnswered = true;
@@ -160,6 +160,7 @@ export async function syncOrganizerWallet(db: ScoopDb, id: number) {
         watchAccountId: account.watchAccountId,
         manualCoreSats: account.manualCoreSats,
         manualKnotsSats: account.manualKnotsSats,
+        synced: true,
       },
     ],
     rows,

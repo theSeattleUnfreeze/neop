@@ -156,6 +156,22 @@ describe("balances", () => {
     );
     assert.equal(account.coreKnown, false);
     assert.equal(account.knotsKnown, true);
+
+    const [fresh] = aggregateAccountBalances(
+      [{ id: 2, source: "electrum", watchAccountId: 1, synced: false }],
+      [row],
+      { core: true, knots: true, coreError: null, knotsError: null }
+    );
+    assert.equal(fresh.coreKnown, false);
+    assert.equal(fresh.knotsKnown, false);
+    const freshTotals = portfolioTotals([fresh], {
+      core: true,
+      knots: true,
+      coreError: null,
+      knotsError: null,
+    });
+    assert.equal(freshTotals.coreKnown, false);
+    assert.equal(freshTotals.knotsKnown, false);
     assert.equal(account.coreSats, 0n);
     assert.equal(account.knotsSats, 900n);
     assert.equal(account.bothCount, 0);

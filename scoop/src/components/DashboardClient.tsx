@@ -190,9 +190,11 @@ export function DashboardClient() {
         {error ? <p className="banner bad">{error}</p> : null}
         {dash && (dash.portfolio.coreKnown === false || dash.portfolio.knotsKnown === false) ? (
           <p className="banner warn">
-            {dash.portfolio.coreKnown === false
-              ? `Core Electrum did not answer${dash.portfolio.coreError ? ` (${dash.portfolio.coreError})` : ""}. Core totals are unknown, not zero.`
-              : `Knots Electrum did not answer${dash.portfolio.knotsError ? ` (${dash.portfolio.knotsError})` : ""}. Knots totals are unknown, not zero.`}{" "}
+            {dash.portfolio.coreKnown === false && dash.portfolio.knotsKnown === false
+              ? "Neither Electrum tip answered the last sync. Balances are unknown, not zero."
+              : dash.portfolio.coreKnown === false
+                ? `Core Electrum did not answer${dash.portfolio.coreError ? ` (${dash.portfolio.coreError})` : ""}. Core totals are unknown, not zero.`
+                : `Knots Electrum did not answer${dash.portfolio.knotsError ? ` (${dash.portfolio.knotsError})` : ""}. Knots totals are unknown, not zero.`}{" "}
             Check the <Link href="/stack">Stack</Link> page.
           </p>
         ) : null}

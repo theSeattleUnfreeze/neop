@@ -13,6 +13,8 @@ export type OrganizerAccountBalanceInput = {
   watchAccountId?: number | null;
   manualCoreSats?: bigint | null;
   manualKnotsSats?: bigint | null;
+  /** False until this wallet has finished a sync. A global tip pulse is not this wallet's balance. */
+  synced?: boolean;
 };
 
 export type ScriptBalance = {
@@ -116,8 +118,9 @@ export function aggregateAccountBalances(
         s.watchAccountId === a.watchAccountId ||
         s.accountId === a.watchAccountId
     );
-    const coreKnown = tips.core;
-    const knotsKnown = tips.knots;
+    const seen = a.synced !== false;
+    const coreKnown = seen && tips.core;
+    const knotsKnown = seen && tips.knots;
     const coreUtxoCount = coreKnown ? mine.filter((s) => s.coreSats > 0n).length : 0;
     const knotsUtxoCount = knotsKnown ? mine.filter((s) => s.knotsSats > 0n).length : 0;
     return {
@@ -150,8 +153,8 @@ export function portfolioTotals(
   }
 ): PortfolioTotals {
   const electrum = accountBalances.filter((a) => !a.estimate);
-  const coreKnown = tips.core || electrum.length === 0;
-  const knotsKnown = tips.knots || electrum.length === 0;
+  const coreKnown = electrum.length === 0 || (tips.core && electrum.every((a) => a.coreKnown));
+  const knotsKnown = electrum.length === 0 || (tips.knots && electrum.every((a) => a.knotsKnown));
   return {
     coreSats: coreKnown
       ? accountBalances.reduce((acc, a) => acc + (a.coreKnown ? a.coreSats : 0n), 0n)
