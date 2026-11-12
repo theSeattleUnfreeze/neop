@@ -30,6 +30,7 @@ Wallet files, seeds, xprvs, xpubs, descriptors, addresses, and master fingerprin
 - **No private keys** — notes may describe wallet locations; keep them on this host
 - **No exfiltration** — do not send wallet material to hosted APIs, block explorers, issue trackers, pull requests, commits, logs, or chat. A format check may report the file type and whether a public key was found. It does not print the key, the addresses, or the seed
 - Postgres holds xpubs/scripthashes/notes — treat the DB as sensitive. Do not commit it or `~/.neop/stack.json`
+- **Backup** — the catalog is that database, not the browser. `/backup` downloads a password-encrypted file (scrypt + AES-256-GCM) and can restore it. The password is not stored. Keep the file and the password.
 
 ### Install matrix
 
