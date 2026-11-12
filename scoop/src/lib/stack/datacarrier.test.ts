@@ -22,7 +22,9 @@ describe("datacarrier assist", () => {
     assert.ok(command);
     assert.match(command, /bitcoin-cli\.exe/);
     assert.match(command, /Start-Sleep -Seconds 8/);
-    assert.match(command, /Start-Process/);
+    assert.match(command, /ProcessStartInfo/);
+    assert.match(command, /-datadir=/);
+    assert.doesNotMatch(command, /Start-Process/);
     assert.match(command, /'C:\\Program Files\\Bitcoin\\bitcoind.exe'/);
     assert.match(command, /'E:\\Bitcoin data'/);
     assert.doesNotMatch(command, /cookie|rpcpassword|rpcuser/i);

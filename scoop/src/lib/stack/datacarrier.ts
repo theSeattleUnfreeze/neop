@@ -46,7 +46,19 @@ export function coreRestartCommand(input: {
   if (!binary || !datadir) return null;
   const cli = cliPath(binary, input.platform);
   if (input.platform === "win32") {
-    return `& ${psQuote(cli)} -datadir=${psQuote(datadir)} stop; Start-Sleep -Seconds 8; Start-Process -FilePath ${psQuote(binary)} -ArgumentList @(${psQuote(`-datadir=${datadir}`)})`;
+    // Start-Process joins -ArgumentList on spaces and does not quote the pieces,
+    // so a datadir with whitespace would be split after stop already succeeded.
+    // ProcessStartInfo.Arguments is one command line, with the path in quotes.
+    return [
+      `& ${psQuote(cli)} -datadir=${psQuote(datadir)} stop`,
+      "Start-Sleep -Seconds 8",
+      "$pinfo = New-Object System.Diagnostics.ProcessStartInfo",
+      `$pinfo.FileName = ${psQuote(binary)}`,
+      "$pinfo.UseShellExecute = $false",
+      `$dd = ${psQuote(datadir)}`,
+      "$pinfo.Arguments = \"-datadir=`\"$dd`\"\"",
+      "[void][System.Diagnostics.Process]::Start($pinfo)",
+    ].join("; ");
   }
   return `${shQuote(cli)} -datadir=${shQuote(datadir)} stop; sleep 8; ${shQuote(binary)} -datadir=${shQuote(datadir)}`;
 }
