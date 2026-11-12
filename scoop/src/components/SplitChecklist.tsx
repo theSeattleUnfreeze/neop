@@ -1,19 +1,48 @@
 "use client";
 
-import { splitSummary, type OutpointRow } from "@/lib/catalog/outpoints";
+import { exposureNewest, splitSummary, type OutpointRow } from "@/lib/catalog/outpoints";
+import {
+  WitnessExposureBadge,
+  type WitnessExposureInfo,
+} from "@/components/WitnessExposure";
+import type { ScriptWitness } from "@/components/CoinTable";
+import {
+  DEFAULT_EXPLORER_CORE,
+  DEFAULT_EXPLORER_KNOTS,
+  type ExplorerBases,
+} from "@/lib/explorer/urls";
 
-type ScriptWitness = { id: number; witnessState?: string | null };
+function exposureFromScript(script: ScriptWitness): WitnessExposureInfo | null {
+  if (!script.witnessExposedTxid) return null;
+  return {
+    tip: script.witnessExposedTip === "knots" ? "knots" : "core",
+    txid: script.witnessExposedTxid,
+    height: script.witnessExposedHeight ?? null,
+    at: script.witnessExposedAt ?? null,
+  };
+}
 
 export function SplitChecklist({
   rows,
   scripts = [],
+  explorers = { core: DEFAULT_EXPLORER_CORE, knots: DEFAULT_EXPLORER_KNOTS },
+  onExplorersChange,
 }: {
   rows: OutpointRow[];
   scripts?: ScriptWitness[];
+  explorers?: ExplorerBases;
+  onExplorersChange?: (next: ExplorerBases) => void;
 }) {
   const summary = splitSummary(rows, scripts);
   const empty = rows.length === 0 && scripts.length === 0;
   if (empty) return null;
+
+  const published = scripts.filter((s) => s.witnessState === "published");
+  const exposures = published
+    .map(exposureFromScript)
+    .filter((e): e is WitnessExposureInfo => e != null)
+    .sort((a, b) => exposureNewest(b.height) - exposureNewest(a.height));
+  const latest = exposures[0] ?? null;
 
   return (
     <section className="scoop-panel split-checklist">
@@ -31,10 +60,17 @@ export function SplitChecklist({
         </p>
       ) : null}
       {summary.publishedScripts > 0 ? (
-        <p className="banner warn">
-          A script in this wallet has already been spent on at least one chain. Its witness is
-          public. Coins that remain on that policy are the ones a watcher can try to take.
-        </p>
+        <div className="banner warn witness-checklist-banner">
+          <p>
+            A script in this wallet has already been spent on at least one chain. Its witness is
+            public. Coins that remain on that policy are the ones a watcher can try to take.
+          </p>
+          <WitnessExposureBadge
+            exposure={latest}
+            explorers={explorers}
+            onExplorersChange={onExplorersChange}
+          />
+        </div>
       ) : null}
       <ol>
         <li>

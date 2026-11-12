@@ -3,10 +3,18 @@
  * Replay risk is one outpoint unspent on both tips. A mixed address is not.
  */
 
-import { annotate, presenceOf, type Presence, type TipView } from "@/lib/catalog/presence";
+import { receivedStamp } from "@/lib/catalog/activity";
+import { annotate, presenceOf, type Presence, type Tip, type TipView } from "@/lib/catalog/presence";
 import type { HistoryItem, ScriptTipSnapshot, UnspentItem } from "@/lib/sync/fetchTip";
 
 export type WitnessState = "hashed" | "published" | "unknown";
+
+/** Most recent non-funding history tx that published this script's witness/pubkey. */
+export type WitnessExposure = {
+  tip: Tip;
+  txid: string;
+  height: number | null;
+};
 
 export type OutpointRow = ReturnType<typeof annotate> & {
   txid: string;
@@ -16,6 +24,10 @@ export type OutpointRow = ReturnType<typeof annotate> & {
   /** False when either indexer failed or was not queried. Presence is then not a split label. */
   classified: boolean;
   witness: WitnessState;
+  /** Confirming height of the live funding, when known. */
+  receivedHeight: number | null;
+  /** Block time of that confirm, when Scoop resolved the header. */
+  receivedAt: string | null;
   accountId?: number | null;
   watchAccountId?: number | null;
 };
@@ -44,6 +56,46 @@ function tipAnswered(snap: ScriptTipSnapshot | undefined): boolean {
 function spendBeyondUnspent(snap: ScriptTipSnapshot): boolean {
   const funding = new Set(snap.unspent.map((u) => u.tx_hash.toLowerCase()));
   return snap.history.some((h: HistoryItem) => !funding.has(h.tx_hash.toLowerCase()));
+}
+
+/** Rank history height so mempool (0 or missing) sorts as newest among confirmed heights. */
+export function exposureNewest(height: number | null | undefined): number {
+  if (height == null || height <= 0) return Number.MAX_SAFE_INTEGER;
+  return height;
+}
+
+function latestExposureOnTip(snap: ScriptTipSnapshot): WitnessExposure | null {
+  if (!snap.ok) return null;
+  const funding = new Set(snap.unspent.map((u) => u.tx_hash.toLowerCase()));
+  let best: HistoryItem | null = null;
+  for (const item of snap.history) {
+    if (funding.has(item.tx_hash.toLowerCase())) continue;
+    if (!best || exposureNewest(item.height) >= exposureNewest(best.height)) best = item;
+  }
+  if (!best) return null;
+  return {
+    tip: snap.tip,
+    txid: best.tx_hash.toLowerCase(),
+    height: best.height > 0 ? best.height : null,
+  };
+}
+
+/**
+ * Most recent spend-side history entry across tips (not a live funding tx).
+ * When both tips expose, prefer the higher ranked height (mempool wins over confirmed).
+ */
+export function witnessExposureFromTips(
+  core: ScriptTipSnapshot | undefined,
+  knots: ScriptTipSnapshot | undefined
+): WitnessExposure | null {
+  const candidates = [core, knots]
+    .filter((s): s is ScriptTipSnapshot => Boolean(s?.ok))
+    .map(latestExposureOnTip)
+    .filter((e): e is WitnessExposure => e != null);
+  if (!candidates.length) return null;
+  return candidates.reduce((a, b) =>
+    exposureNewest(b.height) >= exposureNewest(a.height) ? b : a
+  );
 }
 
 /** A script's witness is published once either tip has a transaction that is not a current funding tx. */
@@ -91,6 +143,7 @@ function viewOf(
       txid,
       vout,
       valueSats: item.value,
+      confirmedHeight: item.height,
     };
   }
   // The funding transaction is in this tip's history, and the outpoint is not unspent:
@@ -103,6 +156,7 @@ function viewOf(
     txid,
     vout,
     spendTxid: spend?.tx_hash,
+    confirmedHeight: spend?.height,
   };
 }
 
@@ -129,6 +183,7 @@ export function outpointRowsFromTips(
       annotated.presence === "both" &&
       coreView.status === "unspent" &&
       knotsView.status === "unspent";
+    const received = receivedStamp(coreView, knotsView);
     return {
       ...annotated,
       txid: side.txid,
@@ -136,6 +191,8 @@ export function outpointRowsFromTips(
       replayRisk,
       classified,
       witness,
+      receivedHeight: received.height,
+      receivedAt: received.at?.toISOString() ?? null,
       accountId: opts.accountId ?? null,
       watchAccountId: opts.watchAccountId ?? null,
     };

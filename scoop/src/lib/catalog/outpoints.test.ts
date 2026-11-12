@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  exposureNewest,
   groupOutpointRows,
   outpointRowsFromTips,
   splitSummary,
+  witnessExposureFromTips,
   witnessFromTips,
 } from "./outpoints.ts";
 import type { ScriptTipSnapshot } from "../sync/fetchTip.ts";
@@ -69,6 +71,53 @@ describe("outpoint rows", () => {
     assert.equal(rows[0].presence, "knots_only");
     assert.equal(rows[0].replayRisk, false);
     assert.equal(rows[0].witness, "published");
+  });
+
+  it("names the most recent spend-side history tx as the pubkey exposure", () => {
+    const funding = "aa".repeat(32);
+    const earlySpend = "bb".repeat(32);
+    const lateSpend = "cc".repeat(32);
+    const core = snap(
+      "core",
+      [{ tx_hash: funding, tx_pos: 0, value: 1, height: 10 }],
+      [
+        { tx_hash: funding, height: 10 },
+        { tx_hash: earlySpend, height: 20 },
+        { tx_hash: lateSpend, height: 30 },
+      ]
+    );
+    const knots = snap("knots", [{ tx_hash: funding, tx_pos: 0, value: 1, height: 10 }]);
+    const exposure = witnessExposureFromTips(core, knots);
+    assert.equal(exposure?.tip, "core");
+    assert.equal(exposure?.txid, lateSpend);
+    assert.equal(exposure?.height, 30);
+  });
+
+  it("ranks a mempool exposure ahead of an older confirmed one", () => {
+    assert.ok(exposureNewest(null) > exposureNewest(30));
+    assert.ok(exposureNewest(0) > exposureNewest(30));
+    const funding = "aa".repeat(32);
+    const confirmed = "bb".repeat(32);
+    const mempool = "cc".repeat(32);
+    const core = snap(
+      "core",
+      [{ tx_hash: funding, tx_pos: 0, value: 1, height: 10 }],
+      [
+        { tx_hash: funding, height: 10 },
+        { tx_hash: confirmed, height: 30 },
+      ]
+    );
+    const knots = snap(
+      "knots",
+      [{ tx_hash: funding, tx_pos: 0, value: 1, height: 10 }],
+      [
+        { tx_hash: funding, height: 10 },
+        { tx_hash: mempool, height: 0 },
+      ]
+    );
+    const exposure = witnessExposureFromTips(core, knots);
+    assert.equal(exposure?.txid, mempool);
+    assert.equal(exposure?.height, null);
   });
 
   it("leaves presence unclassified when an indexer did not answer", () => {

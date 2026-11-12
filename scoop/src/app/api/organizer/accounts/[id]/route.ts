@@ -35,6 +35,13 @@ export async function GET(_req: Request, ctx: Ctx) {
   let scripts: unknown[] = [];
   let rows: AnnotatedRow[] = [];
   let balance = null;
+  const { loadAccountActivity, serializeActivityStamp } = await import(
+    "@/lib/organizer/accountActivity"
+  );
+  const activityMap = await loadAccountActivity(db, [
+    { id: account.id, watchAccountId: account.watchAccountId },
+  ]);
+  const activity = activityMap.get(account.id);
   if (account.watchAccountId) {
     scripts = await db
       .select()
@@ -61,11 +68,15 @@ export async function GET(_req: Request, ctx: Ctx) {
       tips
     )[0];
   }
+  const { loadExplorerBases } = await import("@/lib/explorer/load");
   return NextResponse.json({
     account: serializeBigints(account),
-    scripts,
+    scripts: serializeBigints(scripts),
     rows: serializeBigints(rows),
     balance: serializeBigints(balance),
+    lastReceived: serializeActivityStamp(activity?.lastReceived ?? { height: null, at: null }),
+    lastSent: serializeActivityStamp(activity?.lastSent ?? { height: null, at: null }),
+    explorers: loadExplorerBases(),
   });
 }
 

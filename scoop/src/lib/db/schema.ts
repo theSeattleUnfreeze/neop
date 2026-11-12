@@ -61,6 +61,12 @@ export const watchedScripts = pgTable(
     path: text("path"),
     /** hashed | published | unknown. Set on sync. Not replay risk. */
     witnessState: text("witness_state"),
+    /** Most recent Electrum history tx that is not a live funding (pubkey exposure). */
+    witnessExposedTxid: text("witness_exposed_txid"),
+    /** Tip that saw that exposure: core | knots. */
+    witnessExposedTip: text("witness_exposed_tip"),
+    witnessExposedHeight: integer("witness_exposed_height"),
+    witnessExposedAt: timestamp("witness_exposed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("watched_scripts_scripthash_uidx").on(t.electrumScripthash)]
@@ -183,6 +189,10 @@ export const scriptTipState = pgTable(
     outpointVout: integer("outpoint_vout").notNull(),
     status: tipStateStatusEnum("status").notNull(),
     valueSats: bigint("value_sats", { mode: "bigint" }),
+    /** Confirming block height from Electrum (0 = mempool). */
+    confirmedHeight: integer("confirmed_height"),
+    /** Wall time of that block header, when Scoop resolved it. */
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

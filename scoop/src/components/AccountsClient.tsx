@@ -1,41 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AccountCard } from "@/components/AccountCard";
 import { WalletIntake } from "@/components/WalletIntake";
+import {
+  readWalletsOverviewCache,
+  writeWalletsOverviewCache,
+  type CachedAccount,
+  type CachedCardBalance,
+  type CachedPortfolio,
+} from "@/lib/organizer/walletsCache";
 
-type Account = {
-  id: number;
-  label: string;
-  reminder: string;
-  source: "manual" | "electrum";
-  lastSyncedAt?: string | null;
-  manualCoreSats?: string | null;
-  manualKnotsSats?: string | null;
-};
+type Account = CachedAccount;
+type CardBalance = CachedCardBalance;
+type Portfolio = CachedPortfolio;
+type ActivityStampJson = { height: number | null; at: string | null };
 
-type CardBalance = {
-  coreSats: string;
-  knotsSats: string;
-  bothCount: number;
-  estimate: boolean;
-  coreKnown: boolean;
-  knotsKnown: boolean;
-};
-
-type Portfolio = {
-  coreSats: string;
-  knotsSats: string;
-  coreUtxoCount: number;
-  knotsUtxoCount: number;
-  utxoCount: number;
-  bothCount: number;
-  coreKnown: boolean;
-  knotsKnown: boolean;
-  coreError: string | null;
-  knotsError: string | null;
-};
+const POLL_MS = 10_000;
 
 function formatSats(value: string, known = true) {
   if (!known) return "unknown";
@@ -46,68 +28,166 @@ function formatSats(value: string, known = true) {
   }
 }
 
+function hydrateFromCache(): {
+  accounts: Account[];
+  balances: Map<number, CardBalance>;
+  portfolio: Portfolio | null;
+  ready: boolean;
+} {
+  const cached = readWalletsOverviewCache();
+  if (!cached) {
+    return { accounts: [], balances: new Map(), portfolio: null, ready: false };
+  }
+  return {
+    accounts: cached.accounts,
+    balances: new Map(cached.balances),
+    portfolio: cached.portfolio,
+    ready: true,
+  };
+}
+
 export function AccountsClient() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [balances, setBalances] = useState<Map<number, CardBalance>>(new Map());
-  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [snapshot] = useState(hydrateFromCache);
+  const [accounts, setAccounts] = useState<Account[]>(snapshot.accounts);
+  const [balances, setBalances] = useState<Map<number, CardBalance>>(snapshot.balances);
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(snapshot.portfolio);
   const [error, setError] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(snapshot.ready);
+  const [refreshing, setRefreshing] = useState(false);
   const [adding, setAdding] = useState(false);
+  const loadInFlight = useRef(false);
+  const syncInFlight = useRef(false);
+  const accountsRef = useRef(accounts);
+  accountsRef.current = accounts;
+
+  const applyOverview = useCallback(
+    (nextAccounts: Account[], nextBalances: Map<number, CardBalance>, nextPortfolio: Portfolio | null) => {
+      setAccounts(nextAccounts);
+      setBalances(nextBalances);
+      setPortfolio(nextPortfolio);
+      writeWalletsOverviewCache(nextAccounts, nextBalances, nextPortfolio);
+      setReady(true);
+    },
+    []
+  );
 
   const load = useCallback(async () => {
+    if (loadInFlight.current) return;
+    loadInFlight.current = true;
+    setRefreshing(true);
     setError(null);
-    const [accRes, dashRes] = await Promise.all([
-      fetch("/api/organizer/accounts"),
-      fetch("/api/organizer/dashboard"),
-    ]);
-    const accJson = await accRes.json();
-    const dashJson = await dashRes.json();
-    if (!accRes.ok) {
-      setError(accJson.error ?? "failed to load wallets");
+    try {
+      const [accRes, dashRes] = await Promise.all([
+        fetch("/api/organizer/accounts"),
+        fetch("/api/organizer/dashboard"),
+      ]);
+      const accJson = (await accRes.json().catch(() => ({}))) as {
+        error?: string;
+        accounts?: Account[];
+      };
+      const dashJson = (await dashRes.json().catch(() => ({}))) as {
+        cards?: {
+          account: { id: number };
+          balance: CardBalance;
+          lastReceived?: ActivityStampJson | null;
+          lastSent?: ActivityStampJson | null;
+        }[];
+        portfolio?: Portfolio;
+      };
+      if (!accRes.ok) {
+        setError(accJson.error ?? "failed to load wallets");
+        setReady(true);
+        return;
+      }
+      const nextAccounts = accJson.accounts ?? [];
+      const byId = new Map<number, CardBalance>();
+      if (dashRes.ok) {
+        for (const c of dashJson.cards ?? []) {
+          byId.set(c.account.id, {
+            coreSats: String(c.balance.coreSats),
+            knotsSats: String(c.balance.knotsSats),
+            bothCount: c.balance.bothCount,
+            estimate: c.balance.estimate,
+            coreKnown: c.balance.coreKnown !== false,
+            knotsKnown: c.balance.knotsKnown !== false,
+            lastReceived: c.lastReceived ?? null,
+            lastSent: c.lastSent ?? null,
+          });
+        }
+        const p = dashJson.portfolio;
+        applyOverview(
+          nextAccounts,
+          byId,
+          p
+            ? {
+                coreSats: String(p.coreSats ?? 0),
+                knotsSats: String(p.knotsSats ?? 0),
+                coreUtxoCount: Number(p.coreUtxoCount ?? 0),
+                knotsUtxoCount: Number(p.knotsUtxoCount ?? 0),
+                utxoCount: Number(p.utxoCount ?? 0),
+                bothCount: Number(p.bothCount ?? 0),
+                coreKnown: p.coreKnown !== false,
+                knotsKnown: p.knotsKnown !== false,
+                coreError: p.coreError ?? null,
+                knotsError: p.knotsError ?? null,
+              }
+            : null
+        );
+      } else {
+        applyOverview(nextAccounts, new Map(), null);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "failed to load wallets");
       setReady(true);
+    } finally {
+      loadInFlight.current = false;
+      setRefreshing(false);
+    }
+  }, [applyOverview]);
+
+  /** Soft Electrum sync for watched wallets, then refresh the overview. */
+  const syncElectrum = useCallback(async () => {
+    if (syncInFlight.current) return;
+    const electrum = accountsRef.current.filter((a) => a.source === "electrum");
+    if (!electrum.length) {
+      await load();
       return;
     }
-    setAccounts(accJson.accounts ?? []);
-    if (dashRes.ok) {
-      const byId = new Map<number, CardBalance>();
-      for (const c of dashJson.cards ?? []) {
-        byId.set(c.account.id, {
-          coreSats: String(c.balance.coreSats),
-          knotsSats: String(c.balance.knotsSats),
-          bothCount: c.balance.bothCount,
-          estimate: c.balance.estimate,
-          coreKnown: c.balance.coreKnown !== false,
-          knotsKnown: c.balance.knotsKnown !== false,
-        });
+    syncInFlight.current = true;
+    try {
+      for (const account of electrum) {
+        try {
+          await fetch(`/api/organizer/accounts/${account.id}/sync`, { method: "POST" });
+        } catch {
+          // Keep going; overview load still refreshes whatever tip state we have.
+        }
       }
-      setBalances(byId);
-      const p = dashJson.portfolio;
-      setPortfolio(
-        p
-          ? {
-              coreSats: String(p.coreSats ?? 0),
-              knotsSats: String(p.knotsSats ?? 0),
-              coreUtxoCount: Number(p.coreUtxoCount ?? 0),
-              knotsUtxoCount: Number(p.knotsUtxoCount ?? 0),
-              utxoCount: Number(p.utxoCount ?? 0),
-              bothCount: Number(p.bothCount ?? 0),
-              coreKnown: p.coreKnown !== false,
-              knotsKnown: p.knotsKnown !== false,
-              coreError: p.coreError ?? null,
-              knotsError: p.knotsError ?? null,
-            }
-          : null
-      );
-    } else {
-      setBalances(new Map());
-      setPortfolio(null);
+      await load();
+    } finally {
+      syncInFlight.current = false;
     }
-    setReady(true);
-  }, []);
+  }, [load]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    void (async () => {
+      // Paint from cache first (already in state). Soft-refresh overview, then Electrum.
+      await load();
+      if (cancelled) return;
+      void syncElectrum();
+      timer = setInterval(() => {
+        if (cancelled) return;
+        void syncElectrum();
+      }, POLL_MS);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [load, syncElectrum]);
 
   const hasWallets = accounts.length > 0;
   const intakeOpen = ready && (adding || !hasWallets);
@@ -115,7 +195,10 @@ export function AccountsClient() {
   return (
     <div className="scoop-stack">
       <section className="scoop-panel">
-        <h2>Wallets</h2>
+        <div className="section-head">
+          <h2>Wallets</h2>
+          {ready && refreshing ? <span className="muted tiny">Refreshing…</span> : null}
+        </div>
         <p className="muted">
           A <strong>wallet</strong> is an xpub plus derivation path — the set of addresses Scoop
           watches on Core and Knots. An <strong>account</strong> can later group several wallets.
@@ -177,7 +260,10 @@ export function AccountsClient() {
           open={intakeOpen}
           onOpen={() => setAdding(true)}
           onClose={() => setAdding(false)}
-          onCreated={load}
+          onCreated={async () => {
+            await load();
+            void syncElectrum();
+          }}
         />
       ) : (
         <section className="scoop-panel">
@@ -211,6 +297,8 @@ export function AccountsClient() {
                   coreKnown={bal?.coreKnown}
                   knotsKnown={bal?.knotsKnown}
                   lastSyncedAt={a.lastSyncedAt}
+                  lastReceived={bal?.lastReceived}
+                  lastSent={bal?.lastSent}
                 />
               );
             })}

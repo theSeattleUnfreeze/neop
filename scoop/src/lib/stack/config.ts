@@ -5,10 +5,16 @@ import {
   emptyService,
   STACK_SERVICE_IDS,
   type StackConfig,
+  type StackExplorers,
   type StackFileLink,
   type StackService,
   type StackServiceId,
 } from "@/lib/stack/types";
+import {
+  DEFAULT_EXPLORER_CORE,
+  DEFAULT_EXPLORER_KNOTS,
+  normalizeExplorerBase,
+} from "@/lib/explorer/urls";
 
 export function defaultStackConfigPath(env: NodeJS.ProcessEnv = process.env): string {
   const fromEnv = env.SCOOP_STACK_CONFIG?.trim();
@@ -68,7 +74,35 @@ export function defaultStackConfig(env: NodeJS.ProcessEnv = process.env): StackC
   link.startosHost = env.KNOTS_LINK_HOST?.trim() || "";
   link.endpoint = env.KNOTS_RPC_URL?.trim() || "";
 
-  return { services: [core, coreFulcrum, knots, knotsFulcrum, link] };
+  return {
+    services: [core, coreFulcrum, knots, knotsFulcrum, link],
+    explorers: {
+      core: normalizeExplorerBase(env.SCOOP_EXPLORER_CORE) || DEFAULT_EXPLORER_CORE,
+      knots: normalizeExplorerBase(env.SCOOP_EXPLORER_KNOTS) || DEFAULT_EXPLORER_KNOTS,
+    },
+  };
+}
+
+function mergeExplorers(
+  base: StackExplorers,
+  raw: unknown,
+  env: NodeJS.ProcessEnv
+): StackExplorers {
+  const fromEnvCore = normalizeExplorerBase(env.SCOOP_EXPLORER_CORE);
+  const fromEnvKnots = normalizeExplorerBase(env.SCOOP_EXPLORER_KNOTS);
+  const rec = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    core:
+      fromEnvCore ||
+      normalizeExplorerBase(typeof rec.core === "string" ? rec.core : "") ||
+      base.core ||
+      DEFAULT_EXPLORER_CORE,
+    knots:
+      fromEnvKnots ||
+      normalizeExplorerBase(typeof rec.knots === "string" ? rec.knots : "") ||
+      base.knots ||
+      DEFAULT_EXPLORER_KNOTS,
+  };
 }
 
 function asString(value: unknown): string {
@@ -129,8 +163,11 @@ export function normalizeStackConfig(raw: unknown, env: NodeJS.ProcessEnv = proc
       }
     }
   }
+  const explorersRaw =
+    raw && typeof raw === "object" ? (raw as { explorers?: unknown }).explorers : undefined;
   return {
     services: defaults.services.map((svc) => mergeService(svc, byId.get(svc.id), env)),
+    explorers: mergeExplorers(defaults.explorers, explorersRaw, env),
   };
 }
 
@@ -140,6 +177,7 @@ function localizeConfig(config: StackConfig, env: NodeJS.ProcessEnv): StackConfi
       ...svc,
       endpoint: localizeStackEndpoint(svc.endpoint, env),
     })),
+    explorers: config.explorers,
   };
 }
 

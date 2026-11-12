@@ -754,6 +754,140 @@ a {
   gap: 0.35rem;
 }
 
+.account-activity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  font-size: 0.8rem;
+  margin: 0.35rem 0 0.15rem;
+}
+
+.edit-fold {
+  margin-top: 1rem;
+  border-top: 1px solid var(--scoop-border);
+  padding-top: 0.65rem;
+}
+
+.edit-fold-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.15rem 0;
+}
+
+.edit-fold-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.edit-fold-toggle svg.is-open {
+  transform: rotate(180deg);
+}
+
+.edit-fold-body {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.spill-explainer {
+  margin: 0.5rem 0 0.75rem;
+  max-width: 52rem;
+}
+
+.witness-exposure {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  vertical-align: middle;
+}
+
+.witness-exposure-toggle {
+  cursor: pointer;
+  font: inherit;
+}
+
+.witness-exposure-panel {
+  max-width: 36rem;
+  padding: 0.65rem 0.75rem;
+  border: 2px solid var(--scoop-border);
+  background: var(--scoop-bg);
+  box-shadow: var(--scoop-inset);
+  display: grid;
+  gap: 0.5rem;
+}
+
+.witness-exposure-panel p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.witness-exposure-meta {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.witness-exposure-meta div {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.witness-exposure-meta dt {
+  color: var(--scoop-muted, inherit);
+  opacity: 0.75;
+}
+
+.witness-exposure-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.witness-checklist-banner {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.witness-exposure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.witness-explorer-edit {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.stack-explorers {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.stack-explorers .field {
+  max-width: 36rem;
+}
+
+@keyframes scoop-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-slow {
+  animation: scoop-spin 2.4s linear infinite;
+}
+
 .meta-badge {
   font-size: 0.7rem;
   border: 2px solid var(--scoop-border);
@@ -785,6 +919,19 @@ a {
   border: 1px solid var(--scoop-border);
   font-size: 0.7rem;
   padding: 0 0.25rem;
+}
+
+.notif-wallet-link,
+.task-wallet-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.outpoint-highlight {
+  outline: 2px solid var(--scoop-knots, #c45c26);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--scoop-knots, #c45c26) 12%, transparent);
 }
 
 .notif-dropdown {
