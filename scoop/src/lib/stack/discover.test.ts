@@ -56,4 +56,32 @@ describe("stack path discovery", () => {
     assert.equal(fulcrum?.configFile, "D:\\electrum\\fulcrum-forward.conf");
     assert.equal(fulcrum?.cookieFile, "E:\\Bitcoin\\.cookie");
   });
+
+  it("uses the default datadir and the chain cookie, not a leftover mainnet cookie", () => {
+    const found = corePathsFromProcess(
+      { executable: "bitcoind", commandLine: "bitcoind -testnet4" },
+      { platform: "linux", env: { HOME: "/home/op" } }
+    );
+    assert.equal(found.datadir, "/home/op/.bitcoin");
+    assert.equal(found.configFile, "/home/op/.bitcoin/bitcoin.conf");
+    assert.equal(found.cookieFile, "/home/op/.bitcoin/testnet4/.cookie");
+  });
+
+  it("does not copy a Core cookie that is not on disk", () => {
+    const current = config();
+    const filled = applyDiscoveredPaths(
+      current,
+      {
+        core: {
+          binary: "",
+          datadir: "E:\\Bitcoin",
+          configFile: "",
+          cookieFile: "E:\\Bitcoin\\.cookie",
+        },
+      },
+      (candidate) => candidate !== "E:\\Bitcoin\\.cookie"
+    );
+    const fulcrum = filled.services.find((svc) => svc.id === "core-fulcrum");
+    assert.equal(fulcrum?.cookieFile, "");
+  });
 });

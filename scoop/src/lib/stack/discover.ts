@@ -30,10 +30,48 @@ export function argValue(commandLine: string, name: string): string {
   return match[1].replace(/^"|"$/g, "");
 }
 
-export function corePathsFromProcess(proc: CoreProcess): DiscoveredPaths {
-  const datadir = argValue(proc.commandLine, "datadir");
-  const configFile = argValue(proc.commandLine, "conf") || (datadir ? path.join(datadir, "bitcoin.conf") : "");
-  const cookieFile = argValue(proc.commandLine, "rpccookiefile") || (datadir ? path.join(datadir, ".cookie") : "");
+function hasFlag(commandLine: string, name: string): boolean {
+  return new RegExp(`(?:^|\\s)--?${name}(?:\\s|=|$)`, "i").test(commandLine);
+}
+
+/** Chain folder under the data directory. Empty means mainnet, whose cookie sits in the datadir root. */
+export function chainSubdir(commandLine: string): string {
+  if (hasFlag(commandLine, "testnet4")) return "testnet4";
+  if (hasFlag(commandLine, "testnet")) return "testnet3";
+  if (hasFlag(commandLine, "signet")) return "signet";
+  if (hasFlag(commandLine, "regtest")) return "regtest";
+  const chain = argValue(commandLine, "chain").toLowerCase();
+  if (chain === "testnet4") return "testnet4";
+  if (chain === "test" || chain === "testnet") return "testnet3";
+  if (chain === "signet" || chain === "regtest") return chain;
+  return "";
+}
+
+export function defaultBitcoinDatadir(
+  platform: NodeJS.Platform,
+  env: { APPDATA?: string; HOME?: string }
+): string {
+  if (platform === "win32") return env.APPDATA ? path.win32.join(env.APPDATA, "Bitcoin") : "";
+  if (platform === "darwin") {
+    return env.HOME ? path.posix.join(env.HOME, "Library", "Application Support", "Bitcoin") : "";
+  }
+  return env.HOME ? path.posix.join(env.HOME, ".bitcoin") : "";
+}
+
+export function corePathsFromProcess(
+  proc: CoreProcess,
+  opts?: { platform?: NodeJS.Platform; env?: { APPDATA?: string; HOME?: string } }
+): DiscoveredPaths {
+  const platform = opts?.platform ?? process.platform;
+  const lib = platform === "win32" ? path.win32 : path.posix;
+  const datadir =
+    argValue(proc.commandLine, "datadir") ||
+    defaultBitcoinDatadir(platform, opts?.env ?? process.env);
+  const chain = chainSubdir(proc.commandLine);
+  const configFile = argValue(proc.commandLine, "conf") || (datadir ? lib.join(datadir, "bitcoin.conf") : "");
+  const cookieFile =
+    argValue(proc.commandLine, "rpccookiefile") ||
+    (datadir ? lib.join(datadir, chain, ".cookie") : "");
   return {
     binary: proc.executable.trim(),
     datadir,
@@ -87,7 +125,7 @@ export function applyDiscoveredPaths(
   }
   const coreNow = services.find((svc) => svc.id === "core-node");
   const fulcrumNow = services.find((svc) => svc.id === "core-fulcrum");
-  if (fulcrumNow && !fulcrumNow.cookieFile && coreNow?.cookieFile) {
+  if (fulcrumNow && !fulcrumNow.cookieFile && coreNow?.cookieFile && exists(coreNow.cookieFile)) {
     fulcrumNow.cookieFile = coreNow.cookieFile;
   }
   return { ...config, services };
@@ -127,7 +165,10 @@ async function readBitcoindProcess(): Promise<CoreProcess | null> {
     try {
       const parsed = JSON.parse(stdout.slice(start)) as { ExecutablePath?: string; CommandLine?: string };
       if (!parsed.ExecutablePath || !parsed.CommandLine) return null;
-      return { executable: parsed.ExecutablePath, commandLine: parsed.CommandLine };
+      return {
+        executable: await resolveExecutable(parsed.ExecutablePath),
+        commandLine: parsed.CommandLine,
+      };
     } catch {
       return null;
     }
@@ -139,7 +180,19 @@ async function readBitcoindProcess(): Promise<CoreProcess | null> {
     .find((item) => /(^|\/)bitcoind(\s|$)/.test(item));
   if (!line) return null;
   const executable = line.startsWith('"') ? line.slice(1, line.indexOf('"', 1)) : line.split(/\s+/)[0];
-  return { executable, commandLine: line };
+  return { executable: await resolveExecutable(executable), commandLine: line };
+}
+
+/** `ps` often reports a bare `bitcoind` when it was started from PATH. */
+async function resolveExecutable(executable: string): Promise<string> {
+  if (!executable || executable.includes("/") || executable.includes("\\")) return executable;
+  const locator = process.platform === "win32" ? "where.exe" : "which";
+  const stdout = await run(locator, [executable]);
+  const found = stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line && !line.toLowerCase().startsWith("info:"));
+  return found || executable;
 }
 
 async function readDockerMounts(containerName: string): Promise<DockerMount[] | null> {
