@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Iterable, List, Optional, Sequence
 
-from neopd.wedges import has_core_bound_op_return_wedge
+from neopd.wedges import has_core_bound_op_return_wedge, has_knots_bound_unified_sighash
 
 
 class FlavorPresence(str, Enum):
@@ -83,9 +83,8 @@ def evaluate_send(
     Allow when:
     - allow_dual_effect is True (explicit dual-effect escape), or
     - at least one input is spendable only on the selected flavor (unique-input), or
-    - flavor is legacy (Core) and raw_tx_hex embeds an OP_RETURN scriptPubKey > 83 bytes.
-
-    Knots #357 sighash wedge detection is not implemented yet.
+    - flavor is legacy (Core) and raw_tx_hex embeds an OP_RETURN scriptPubKey > 83 bytes, or
+    - flavor is blake2b (Knots) and raw_tx_hex has a 65-byte witness signature ending in 0x21.
     """
     if flavor not in ("legacy", "blake2b"):
         raise ValueError("flavor must be legacy|blake2b")
@@ -99,6 +98,12 @@ def evaluate_send(
         flavor == "legacy"
         and raw_tx_hex
         and has_core_bound_op_return_wedge(raw_tx_hex)
+    ):
+        return SendDecision.ALLOW
+    if (
+        flavor == "blake2b"
+        and raw_tx_hex
+        and has_knots_bound_unified_sighash(raw_tx_hex)
     ):
         return SendDecision.ALLOW
     if all(c.flavor_presence is FlavorPresence.BOTH for c in inputs):
