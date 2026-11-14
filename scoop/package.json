@@ -5,6 +5,7 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "next dev -H 127.0.0.1 -p 3847",
+    "stack:up": "tsx src/lib/stack/upCli.ts",
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 3847",
     "lint": "next lint",

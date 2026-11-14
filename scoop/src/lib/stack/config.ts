@@ -150,6 +150,7 @@ function mergeService(
     identityFile: asString(rec.identityFile),
     logFile: asString(rec.logFile),
     startosHost: asString(rec.startosHost),
+    remoteStart: asString(rec.remoteStart),
   };
 }
 

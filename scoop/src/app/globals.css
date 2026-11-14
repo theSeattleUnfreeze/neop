@@ -415,6 +415,47 @@ a {
   align-items: center;
 }
 
+.stack-readout {
+  list-style: none;
+  width: 100%;
+  max-width: 22rem;
+  margin: 0.85rem 0 0;
+  padding: 0;
+}
+
+.stack-readout li {
+  margin-top: 0.65rem;
+}
+
+.stack-readout-name {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.stack-sync-label {
+  margin: 0.1rem 0 0;
+  color: var(--scoop-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.stack-sync-track {
+  height: 0.45rem;
+  margin-top: 0.28rem;
+  border: 1px solid var(--scoop-border);
+  background: transparent;
+}
+
+.stack-sync-fill {
+  height: 100%;
+  background: var(--scoop-core);
+}
+
+.stack-sync-track.tone-knots .stack-sync-fill {
+  background: var(--scoop-knots);
+}
+
 .stack-wire {
   width: 2px;
   height: 1.1rem;

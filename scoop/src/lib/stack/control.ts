@@ -4,6 +4,19 @@ import path from "node:path";
 import { revealablePaths } from "@/lib/stack/config";
 import type { StackConfig, StackService, StackServiceId } from "@/lib/stack/types";
 
+/** True for Docker -p specs that bind on this host (loopback, all-interfaces, or bare ports). */
+export function isLocalDockerPublish(publish: string): boolean {
+  const p = publish.trim();
+  if (!p) return false;
+  // Bare "50111:50111" publishes on all host interfaces.
+  if (/^\d+:\d+$/.test(p)) return true;
+  // ip:hostPort:containerPort — only loopback or all-interfaces.
+  if (p.startsWith("127.0.0.1:") || p.startsWith("0.0.0.0:")) {
+    return /^\d+\.\d+\.\d+\.\d+:\d+:\d+$/.test(p);
+  }
+  return false;
+}
+
 export function startBlockReason(svc: StackService): string | null {
   if (svc.control === "remote" || svc.id === "knots-node" || svc.id === "knots-fulcrum") {
     return `${svc.label} is observed from here. Start it on the machine that owns it.`;
@@ -16,8 +29,10 @@ export function startBlockReason(svc: StackService): string | null {
     if (!svc.containerName || !svc.image || !svc.datadir || !svc.configFile || !svc.publish) {
       return "Set the container name, image, datadir, config file, and published port first.";
     }
-    if (!svc.publish.startsWith("127.0.0.1:")) {
-      return "Docker publish must start with 127.0.0.1: so Core Fulcrum stays on this machine.";
+    // Allow loopback (127.0.0.1) or all-interfaces (0.0.0.0 / bare host:container) for LAN Sparrow.
+    // Docker -p only binds addresses on this machine; reject anything that is not a local publish spec.
+    if (!isLocalDockerPublish(svc.publish)) {
+      return "Docker publish must be a local bind such as 127.0.0.1:50111:50111 or 0.0.0.0:50111:50111.";
     }
     return null;
   }
