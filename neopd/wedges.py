@@ -6,6 +6,8 @@ from typing import List, Tuple
 
 # Knots datacarriersize counts full scriptPubKey length; Core-bound wedge is > 83.
 MIN_CORE_WEDGE_SCRIPT_PUBKEY_LEN = 84
+# SIGHASH_ALL | SIGHASH_UNIFIED. Knots #357. Parsing the byte is not sighash crypto.
+SIGHASH_ALL_UNIFIED = 0x21
 
 
 def _read_compact_size(buf: bytes, i: int) -> Tuple[int, int]:
@@ -28,12 +30,11 @@ def _read_compact_size(buf: bytes, i: int) -> Tuple[int, int]:
     return int.from_bytes(buf[i : i + 8], "little"), i + 8
 
 
-def iter_tx_output_scripts(raw: bytes) -> List[bytes]:
-    """Return each output scriptPubKey from a non-segwit or segwit tx serialization."""
+def _walk_tx(raw: bytes) -> Tuple[List[bytes], List[bytes]]:
+    """Output scripts and witness items. Witness items are empty when the tx is not segwit."""
     if len(raw) < 10:
         raise ValueError("tx too short")
     i = 4  # version
-    # Optional segwit marker/flag
     if i + 2 <= len(raw) and raw[i] == 0x00 and raw[i + 1] == 0x01:
         i += 2
         segwit = True
@@ -63,15 +64,39 @@ def iter_tx_output_scripts(raw: bytes) -> List[bytes]:
         scripts.append(raw[i : i + script_len])
         i += script_len
 
+    witness: List[bytes] = []
     if segwit:
-        # Skip witness stacks; not needed for scriptPubKey wedge detection.
         for _ in range(vin_count):
             n_items, i = _read_compact_size(raw, i)
             for _item in range(n_items):
                 item_len, i = _read_compact_size(raw, i)
+                if i + item_len > len(raw):
+                    raise ValueError("truncated tx (witness)")
+                witness.append(raw[i : i + item_len])
                 i += item_len
+    return scripts, witness
 
+
+def iter_tx_output_scripts(raw: bytes) -> List[bytes]:
+    """Return each output scriptPubKey from a non-segwit or segwit tx serialization."""
+    scripts, _witness = _walk_tx(raw)
     return scripts
+
+
+def iter_witness_items(raw: bytes) -> List[bytes]:
+    """Return witness stack items. Empty for a transaction that is not segwit."""
+    _scripts, witness = _walk_tx(raw)
+    return witness
+
+
+def _tx_bytes(tx_hex: str) -> bytes:
+    hx = tx_hex.strip().lower()
+    if hx.startswith("0x"):
+        hx = hx[2:]
+    try:
+        return bytes.fromhex(hx)
+    except ValueError as exc:
+        raise ValueError("tx hex is not valid") from exc
 
 
 def has_core_bound_op_return_wedge(
@@ -80,16 +105,21 @@ def has_core_bound_op_return_wedge(
     min_script_pubkey_len: int = MIN_CORE_WEDGE_SCRIPT_PUBKEY_LEN,
 ) -> bool:
     """True if any output is OP_RETURN with scriptPubKey length > 83 (default)."""
-    hx = tx_hex.strip().lower()
-    if hx.startswith("0x"):
-        hx = hx[2:]
-    try:
-        raw = bytes.fromhex(hx)
-    except ValueError as exc:
-        raise ValueError("tx hex is not valid") from exc
-    for script in iter_tx_output_scripts(raw):
+    for script in iter_tx_output_scripts(_tx_bytes(tx_hex)):
         if not script:
             continue
         if script[0] == 0x6A and len(script) >= min_script_pubkey_len:
+            return True
+    return False
+
+
+def has_knots_bound_unified_sighash(tx_hex: str) -> bool:
+    """True when a witness item is a 65-byte signature ending in 0x21.
+
+    That byte is SIGHASH_ALL|UNIFIED from Knots #357. This only reads the
+    sighash byte. It does not check the signature or reimplement consensus.
+    """
+    for item in iter_witness_items(_tx_bytes(tx_hex)):
+        if len(item) == 65 and item[-1] == SIGHASH_ALL_UNIFIED:
             return True
     return False
