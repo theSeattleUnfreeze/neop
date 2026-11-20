@@ -151,7 +151,7 @@ class NeopdService:
                 -32021,
                 "replay_risk_unresolved: spend still valid on other tip "
                 "(use unique inputs, Core OP_RETURN wedge >83 when flavor=legacy, "
-                "ceremony, or allow_dual_effect; Knots #357 wedge not wired yet)",
+                "a 0x21 witness sighash when flavor=blake2b, or allow_dual_effect)",
             )
         try:
             txid = self._engine(flavor).sendrawtransaction(hexstring)

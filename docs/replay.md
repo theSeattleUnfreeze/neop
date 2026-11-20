@@ -46,7 +46,7 @@ Safe wallet split order: **Knots first** (unified), confirm, then spend the Core
 ### Caveats
 
 - OP_RETURN garnish depends on the Knots tip still enforcing the ≤83 rule. After RDTS expiry (or on a tip without that rule), **taint / unique-input is mandatory** for Core-only effect.
-- The sighash wedge is unavailable until #357 is live on the Knots tip. Until then, Knots-bound ordinary sends of `both` UTXOs remain **default-deny** unless unique-input or explicit `allow_dual_effect`.
+- `neopd` allows a Knots spend of a `both` coin when a witness signature ends in `0x21`. The Knots node still has to accept that signature. Until #357 is enforced there, that send fails at the node. Unique-input and `allow_dual_effect` remain the other ways through the gate.
 - **Never** claim Blake2b / SHA-256d PoW alone as replay protection.
 - Related art: [bip110-splittor / bip110swap.net](https://github.com/a1denvalu3/bip110-splittor) is a **browser hot wallet + atomic-swap marketplace**. It is **not** part of the Neop stack and the hosted site is not endorsed (keys in `localStorage`; do not fund it). Its Knots-side split idea (`SIGHASH_ALL|UNIFIED` / Knots [#357](https://github.com/bitcoinknots/bitcoin/pull/357)) matches Neop’s Knots wedge. The older gist that described a Taproot `OP_IF` split is stale. **Primary lasting Core protection is taint / unique-input — not OP_RETURN.**
 
@@ -73,7 +73,7 @@ Error when unresolved: `replay_risk_unresolved`.
 | Default-deny send for all-`both` inputs without unique-input or `allow_dual_effect` | Wired (`sendrawtransaction` → `evaluate_send`) |
 | Unique-input (taint) acceptance | Wired (`evaluate_send`) |
 | Core OP_RETURN garnish detection (scriptPubKey > 83) on `flavor=legacy` | Wired (`neopd.wedges` → `evaluate_send`) — **RDTS-window tooling** |
-| Knots #357 sighash wedge detection (`SIGHASH_ALL|UNIFIED` / 0x21 on Taproot key-path witness) | Wired (`neopd.wedges.has_knots_bound_unified_sighash` → `evaluate_send`) when tip enforces it |
+| Knots #357 sighash wedge detection (`SIGHASH_ALL|UNIFIED` / 0x21 on a 65-byte witness item) | Wired (`neopd.wedges.has_knots_bound_unified_sighash` → `evaluate_send`). The Knots node still enforces the signature. |
 | `protectwallet` / `getreplaystatus` | Wired — dry-run plan always; unsigned PSBTs via engine `createpsbt` when `dry_run=false` |
 
 Core-bound ceremony txs with an embedded OP_RETURN garnish may go through `neopd sendrawtransaction` when `flavor=legacy` and `inputs` are catalogued (**temporary** under RDTS). Knots-bound txs with a 0x21 key-path signature may go through `flavor=blake2b`. Sign in Sparrow (Core) or Shrike (Knots); Scoop never holds keys.

@@ -14,6 +14,18 @@ from neopd.catalog import (
 )
 
 
+def _keypath(sighash: int) -> str:
+    sig = b"\x11" * 64 + bytes([sighash])
+    raw = bytearray(b"\x02\x00\x00\x00\x00\x01\x01")
+    raw += b"\x22" * 32
+    raw += b"\x00\x00\x00\x00\x00\xff\xff\xff\xff\x01"
+    raw += (1000).to_bytes(8, "little")
+    raw += b"\x01\x6a\x01"
+    raw += bytes([len(sig)]) + sig
+    raw += b"\x00\x00\x00\x00"
+    return raw.hex()
+
+
 def _coin(presence: FlavorPresence, txid="aa" * 32, vout=0) -> Coin:
     return Coin(txid=txid, vout=vout, flavor_presence=presence)
 
@@ -70,6 +82,30 @@ class EvaluateSendTests(unittest.TestCase):
             "blake2b",
             [_coin(FlavorPresence.BOTH)],
             raw_tx_hex=tx_hex,
+        )
+        self.assertEqual(decision, SendDecision.REPLAY_RISK_UNRESOLVED)
+
+    def test_unified_sighash_allows_blake2b_both(self):
+        decision = evaluate_send(
+            "blake2b",
+            [_coin(FlavorPresence.BOTH)],
+            raw_tx_hex=_keypath(0x21),
+        )
+        self.assertEqual(decision, SendDecision.ALLOW)
+
+    def test_plain_sighash_does_not_allow_blake2b_both(self):
+        decision = evaluate_send(
+            "blake2b",
+            [_coin(FlavorPresence.BOTH)],
+            raw_tx_hex=_keypath(0x01),
+        )
+        self.assertEqual(decision, SendDecision.REPLAY_RISK_UNRESOLVED)
+
+    def test_unified_sighash_does_not_allow_legacy(self):
+        decision = evaluate_send(
+            "legacy",
+            [_coin(FlavorPresence.BOTH)],
+            raw_tx_hex=_keypath(0x21),
         )
         self.assertEqual(decision, SendDecision.REPLAY_RISK_UNRESOLVED)
 
