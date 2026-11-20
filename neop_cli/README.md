@@ -22,7 +22,7 @@ PYTHONPATH=. python3 -m neop_cli check-signed-hex --help
 | Knots reject oracle (`check-signed-hex`) | Wired (requires signed raw hex) |
 | `neopd sendrawtransaction` Core OP_RETURN wedge detection | Wired for `flavor=legacy` (`neopd.wedges`) |
 | Knots #357 sighash wedge in `neopd` | Wired for `flavor=blake2b` (65-byte witness item ending in `0x21`) |
-| `protectwallet` / `getreplaystatus` RPC | **Planned** in `neopd` |
+| `protectwallet` / `getreplaystatus` RPC | Wired as counts and a dry-run plan. `neopd` does not build PSBTs. |
 
 Core-bound ceremony: build with `protect-psbt`, sign in Sparrow, broadcast via Core engine **or** `neopd sendrawtransaction` with `flavor=legacy` once inputs are in the catalog. Validate Knots rejection with `check-signed-hex`. A Knots-bound spend of a `both` coin is allowed when the witness carries sighash `0x21`. `neopd` reads that byte; the Knots node still enforces the signature.
 
