@@ -31,13 +31,18 @@ export type StackService = {
   rpcPassword: string;
   containerName: string;
   image: string;
-  /** Docker publish spec, host side first: 127.0.0.1:50111:50111 */
+  /** Docker publish spec, host side first: 127.0.0.1:50111:50111 or 0.0.0.0:50111:50111 for LAN */
   publish: string;
   files: StackFileLink[];
   script: string;
   identityFile: string;
   logFile: string;
   startosHost: string;
+  /**
+   * One shell line run by scoop.cmd / scripts/scoop.sh on this PC.
+   * The web UI does not execute it. Typical value is an ssh command.
+   */
+  remoteStart: string;
 };
 
 export type StackExplorers = {
@@ -62,6 +67,8 @@ export type StackStatusRow = {
   endpoint: string;
   height: number | null;
   headers: number | null;
+  /** Node verification progress, 0–1. Fulcrum leaves this empty; the page compares tips. */
+  progress: number | null;
   detail: string;
   configFile: string;
   datadir: string;
@@ -88,5 +95,6 @@ export function emptyService(id: StackServiceId, label: string, control: "local"
     identityFile: "",
     logFile: "",
     startosHost: "",
+    remoteStart: "",
   };
 }

@@ -10,6 +10,12 @@ broadcast.json
 *~
 .idea/
 .vscode/
+.cursor/agentic-review/
+
+# Local scratch (not product)
+fulcrum-walk-tui.jpg
+scoop/src/lib/db/errors.ts
+scoop/src/lib/db/errors.test.ts
 
 # Build / env
 .env

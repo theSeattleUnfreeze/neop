@@ -50,6 +50,48 @@ docker compose -f docker-compose.scoop.yml --profile scoop up --build
 # UI + Postgres on loopback only
 ```
 
+### Who starts what
+
+The browser has no shell. A Start button on **Stack** (`/stack`) or the dashboard is a POST to
+`http://127.0.0.1:3847/api/stack/service` with the header `x-scoop-local: 1`. The Host must be
+loopback, so a page loaded from somewhere else cannot call it. The Scoop process, running as you
+on this PC, then starts:
+
+| Service | What the Scoop process runs |
+|---------|-----------------------------|
+| Core node | `bitcoind -datadir=…` from the path in the stack file |
+| Core Fulcrum | `docker start` of the named container, or `docker run` if it does not exist yet |
+| Knots RPC tunnel | the local PowerShell script named in the stack file |
+
+Knots and Knots Fulcrum on another machine have no Start button. Scoop does not open SSH because
+a page asked. That only works when Scoop itself is the host process (`scoop.cmd`, `./scripts/scoop.sh`,
+or `pnpm run dev`). The Scoop Docker container cannot start host bitcoind.
+
+### One command
+
+From the repo root, `scoop.cmd` on Windows or `./scripts/scoop.sh` on Unix:
+
+1. Starts the `postgres-scoop` container when nothing is listening on `127.0.0.1:5432`.
+   From WSL, `docker` has to be the Docker Desktop integration for that distro. If it is only
+   the “command not found in this WSL distro” stub, the script tries `docker.exe` and, if that
+   also fails, keeps going. The same script uses `pnpm` or `npm` from the shell, and otherwise
+   the Windows `npm` beside `npm.cmd`. `scoop.cmd` is the PowerShell path when WSL has no Node.
+2. Runs `pnpm run stack:up` (or npm). That reads `SCOOP_STACK_CONFIG` or `~/.neop/stack.json`.
+   For each service whose port is closed it starts Core, Core Fulcrum, and a filled-in tunnel
+   the same way the page would. A service with no URL is left alone, so a second bitcoind is not
+   started blind. For a remote service it runs that service's `remoteStart`
+   line in a shell on this PC. A typical line is `ssh`. The command is not printed.
+3. Starts Scoop at http://127.0.0.1:3847 and opens that page.
+
+If one service fails, Scoop still opens. The dashboard can offer Core again. `remoteStart` is
+edited on the Stack page for Knots and Knots Fulcrum and is stored only in the local stack file.
+
+```json
+"remoteStart": "ssh -i IDENTITY startos@STARTOS_HOST echo start-knots"
+```
+
+`stack:up` leaves a remote service alone when `remoteStart` is empty. The page never runs that line.
+
 ## Threat model
 
 - xpubs / descriptors / addresses are sensitive. Default bind: **`127.0.0.1:3847`**.

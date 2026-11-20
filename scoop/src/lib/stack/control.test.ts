@@ -8,6 +8,7 @@ describe("stack control", () => {
   it("does not start a remote Knots service", () => {
     const knots = emptyService("knots-fulcrum", "Knots Fulcrum", "remote");
     knots.endpoint = "ssl://knots.example:50002";
+    knots.remoteStart = "ssh startos@STARTOS_HOST echo up";
     assert.match(startBlockReason(knots) ?? "", /observed/);
   });
 
@@ -19,15 +20,19 @@ describe("stack control", () => {
     assert.equal(startBlockReason(core), null);
   });
 
-  it("refuses a Core Fulcrum publish that is not loopback", () => {
+  it("allows loopback or all-interfaces Core Fulcrum publish", () => {
     const fulcrum = emptyService("core-fulcrum", "Core Fulcrum", "local");
     fulcrum.containerName = "fulcrum";
     fulcrum.image = "fulcrum";
     fulcrum.datadir = "C:\\fulcrum";
     fulcrum.configFile = "C:\\fulcrum\\fulcrum.conf";
+    fulcrum.publish = "evil.example:50111:50111";
+    assert.match(startBlockReason(fulcrum) ?? "", /local bind/);
     fulcrum.publish = "0.0.0.0:50111:50111";
-    assert.match(startBlockReason(fulcrum) ?? "", /127\.0\.0\.1/);
+    assert.equal(startBlockReason(fulcrum), null);
     fulcrum.publish = "127.0.0.1:50111:50111";
+    assert.equal(startBlockReason(fulcrum), null);
+    fulcrum.publish = "50111:50111";
     assert.equal(startBlockReason(fulcrum), null);
   });
 });

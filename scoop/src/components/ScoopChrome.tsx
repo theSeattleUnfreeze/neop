@@ -39,7 +39,7 @@ export function ScoopChrome({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <p className="scoop-tagline">
-          Dual-tip catalog on localhost. No keys. The Stack page can start the local node and indexer.
+          Dual-tip catalog on localhost. No keys. Stack starts Core on this PC. scoop.cmd starts remote services.
         </p>
         <ThemeToggle />
       </header>

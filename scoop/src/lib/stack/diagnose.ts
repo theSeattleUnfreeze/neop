@@ -225,7 +225,7 @@ async function diagnoseCoreFulcrum(svc: StackService, coreBusy: boolean): Promis
   if (dockerUp && !configOk) {
     steps.push({
       title: "Fill the Fulcrum fields in Details",
-      body: "Scoop needs the container name, image, index datadir, fulcrum.conf, and Docker publish spec (ip:host port:container port, for example 127.0.0.1:50111:50111).",
+      body: "Scoop needs the container name, image, index datadir, fulcrum.conf, and Docker publish spec (for example 127.0.0.1:50111:50111, or 0.0.0.0:50111:50111 for LAN Sparrow).",
       revealPath: svc.configFile || svc.datadir || undefined,
     });
   }

@@ -1,5 +1,7 @@
 "use client";
 
+import { SyncMeter } from "@/components/SyncMeter";
+import { syncView } from "@/lib/stack/syncView";
 import type { StackServiceId, StackStatusRow } from "@/lib/stack/types";
 
 type Piece = {
@@ -50,8 +52,9 @@ export function StackGlance({ labels, endpoints, rows, pending, busyIds, onSelec
   return (
     <div className="stack-glance">
       <p className="muted stack-glance-note">
-        Indexers sit on the nodes. Scoop watches both Fulcrum servers. Solid is up, striped is down,
-        tinted outline is busy, dashed is still checking. Click a shape for its paths.
+        Solid is up, striped is down, tinted outline is busy, dashed is still checking. A syncing
+        node shows its block height. Fulcrum’s bar is its tip against that node’s blocks, once the
+        node answers. Click a shape for its paths.
       </p>
       <div className="stack-lanes">
         {LANES.map((lane) => (
@@ -83,6 +86,26 @@ export function StackGlance({ labels, endpoints, rows, pending, busyIds, onSelec
                 </div>
               );
             })}
+            <ul className="stack-readout">
+              {lane.pieces.map((piece) => {
+                const row = rows.find((item) => item.id === piece.id);
+                const nodeId = lane.tone === "core" ? "core-node" : "knots-node";
+                const node = rows.find((item) => item.id === nodeId);
+                const view = row ? syncView(row, node) : null;
+                const label = labels[piece.id] ?? piece.id;
+                const text = view?.label ?? row?.detail ?? (pending ? "Checking…" : "No status yet.");
+                return (
+                  <li key={piece.id}>
+                    <span className="stack-readout-name">{label}</span>
+                    {view ? (
+                      <SyncMeter label={text} ratio={view.ratio} tone={lane.tone} />
+                    ) : (
+                      <p className="stack-sync-label">{text}</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         ))}
       </div>
