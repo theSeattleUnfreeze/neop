@@ -22,7 +22,7 @@ function asWitness(value: string | null | undefined): WitnessState {
   return "unknown";
 }
 
-/** One catalog row per stored unspent outpoint. Replay risk is that outpoint on both tips. */
+/** One catalog row per stored outpoint that is still unspent on a tip, or spent on both. */
 export function outpointRowsFromStored(
   scriptId: number,
   address: string | null | undefined,
@@ -76,7 +76,7 @@ export function outpointRowsFromStored(
         watchAccountId,
       };
     })
-    .filter((row) => row.core.status === "unspent" || row.knots.status === "unspent");
+    .filter((row) => row.core.status === "unspent" || row.knots.status === "unspent" || row.spill);
 }
 
 /** Build annotated catalog rows from persisted script_tip_state (post-sync dashboard). */

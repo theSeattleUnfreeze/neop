@@ -97,4 +97,42 @@ describe("tipStateRows", () => {
     assert.equal(rows[0].replayRisk, false);
     assert.equal(rows[0].presence, "both");
   });
+
+  it("keeps a same-outpoint dual spend and drops independent spends", () => {
+    const shared = "aa".repeat(32);
+    const coreOnly = "bb".repeat(32);
+    const knotsOnly = "cc".repeat(32);
+    const stored = (
+      tip: "core" | "knots",
+      txid: string,
+      vout: number
+    ) => ({
+      scriptId: 4,
+      tip,
+      outpointTxid: txid,
+      outpointVout: vout,
+      status: "spent" as const,
+      valueSats: null,
+      confirmedHeight: 10,
+      confirmedAt: null,
+    });
+    const rows = outpointRowsFromStored(
+      4,
+      "bc1q",
+      [
+        stored("core", shared, 0),
+        stored("knots", shared, 0),
+        stored("core", coreOnly, 1),
+        stored("knots", knotsOnly, 2),
+      ],
+      1
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].txid, shared);
+    assert.equal(rows[0].vout, 0);
+    assert.equal(rows[0].spill, true);
+    assert.equal(rows[0].replayRisk, false);
+    assert.equal(rows[0].core.status, "spent");
+    assert.equal(rows[0].knots.status, "spent");
+  });
 });
